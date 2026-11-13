@@ -1,0 +1,6 @@
+Team notes — Ajaia
+A quiet place to turn ideas into decisions.
+
+Next steps
+Keep <strong>literal markup</strong> as text, not HTML.
+Alice writes. Bob reads.
