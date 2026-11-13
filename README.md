@@ -1,10 +1,10 @@
 # Ajaia Documents
 
-A small document workspace: write and save rich text, import plain text, and give a demo teammate read access.
+A small document workspace: write and save rich text, import plain text, and give a demo teammate Reader or Writer access.
 
 Product URL: https://docs-ajaai.onrender.com
 
-**Release status:** local build/import tests pass. The owner flow and pre-share denial pass against real Supabase from local browsers. The deployed flow and complete sharing flow remain unverified. See [CHECKS.md](CHECKS.md) for actual outcomes and [DASHBOARD_SETUP.md](DASHBOARD_SETUP.md) for pending dashboard actions. Do not treat the URL above as a verified release until those checks pass.
+**Release status:** local build/import tests pass. The owner flow and pre-share denial pass against real Supabase from local browsers. Reader/Writer roles are a later requested extension: build, local policy checks and UI checks are recorded in CHECKS.md; cloud role verification requires the second migration. See [CHECKS.md](CHECKS.md) for actual outcomes and [DASHBOARD_SETUP.md](DASHBOARD_SETUP.md) for pending dashboard actions. Do not treat the URL above as a verified release until those checks pass.
 
 ## Run locally
 
@@ -36,7 +36,7 @@ There is no configured lint script. TypeScript strict checking runs as part of b
 
 ## Database and demo users
 
-Run `supabase/migrations/202611130001_documents.sql` **once** in the existing project's SQL Editor. It creates the schema, constraints, column grants, update trigger, and row policies in one transaction. Create two auto-confirmed password users through Supabase Authentication → Users. Disable public signups. Seed only their aliases and UUIDs into `public.demo_users`:
+Run `supabase/migrations/202611130001_documents.sql` **once** in the existing project's SQL Editor. Then run `supabase/migrations/202611130002_share_roles.sql` **once** to enable roles (existing shares default to Reader). On an existing installation, apply only the new second migration; do not rerun the first. It creates the schema, constraints, column grants, update trigger, and row policies in one transaction. Create two auto-confirmed password users through Supabase Authentication → Users. Disable public signups. Seed only their aliases and UUIDs into `public.demo_users`:
 
 ```sql
 insert into public.demo_users (id, alias) values
@@ -59,14 +59,14 @@ Use Alice in a normal browser window and Bob in a separate browser/profile or pr
 1. Alice signs in. Select **New document**, rename the inline title, and type some text. Use Bold, Italic, Underline, heading styles, and both lists. Toolbar buttons show pressed states; Tab reaches all controls. Standard Tiptap shortcuts work.
 2. Select **Save** or Ctrl/Cmd+S. Wait for **Saved**. Refresh the direct `/docs/:id` URL. Title and formatting should persist.
 3. Copy the direct URL into Bob's separate session. Sign in as Bob. Before sharing he should see an unavailable/no-access message, not the document.
-4. Alice selects **Share**, picks Bob, and grants read access. The picker excludes Alice and existing recipients. Escape closes the dialog and returns focus. Repeated grants are harmless.
-5. Bob refreshes. He can read the document; **Read-only** is visible and editing/Save/Share controls are absent. In his library it appears under **Shared with me**, labeled with Alice as owner. Alice sees it under **My documents**.
+4. Alice selects **Share**, picks Bob, chooses Reader or Writer, and grants access. The picker excludes Alice and existing recipients. Escape closes the dialog and returns focus. Repeated grants are harmless.
+5. Bob refreshes. As Reader he can read the document; **Read-only** is visible and editing/Save/Share controls are absent. In his library it appears under **Shared with me**, labeled with Alice as owner. Alice sees it under **My documents**. In Share → Who has access, Alice changes **Role for Bob** to **Writer**. Bob refreshes/reopens, edits title/body, and saves; Alice refreshes to see the result. Writers cannot manage sharing. Change Bob back to Reader to remove write access.
 6. Alice returns to the library and imports `samples/team-notes.txt`. Title becomes `team-notes`; blank lines and `<strong>literal markup</strong>` remain literal text. Refresh to confirm persistence. Invalid or oversized files show a clear error without replacing any library entries.
 7. Alice edits again, goes offline using browser devtools, and selects Save. The error must retain the draft. Reconnect and retry Save. Wait for Saved and refresh.
 8. At 390px width, confirm formatting controls wrap, remain keyboard reachable, and have visible focus. While dirty, Library, browser Back, sign out, and refresh must warn before discarding changes (browser refresh warnings depend on browser support and user interaction).
 9. Open a direct document URL signed out: it should require sign-in and restore the requested destination afterward.
 
-The save path is explicit and one request at a time. Edits made while saving stay dirty. Failed saves keep the in-memory draft for retry. Navigation discards a draft only after confirmation. No autosave or local draft recovery is implemented. Two owner tabs use **last-save-wins**; there is no simultaneous-edit conflict resolution.
+The save path is explicit and one request at a time. Edits made while saving stay dirty. Failed saves keep the in-memory draft for retry. Navigation discards a draft only after confirmation. No autosave or local draft recovery is implemented. Owner and Writer sessions use **last-save-wins**; there is no simultaneous-edit conflict resolution.
 
 ## File import limits
 
@@ -82,8 +82,8 @@ npx playwright install chromium
 node scripts/browser-check.mjs
 ```
 
-The first script checks real API reads, denied writes/grants, immutable columns, constraints, duplicate grants, owner preservation, and anonymous denial. A zero-row update is a denial, not a success. It leaves a labeled permission-check document. The second uses two independent browser sessions against the real backend and leaves walkthrough/import sample documents. Neither script accepts an admin key. Browser screenshots go into ignored `artifacts/`.
+The first script checks real API reads, Reader write denial, Writer saves, owner-only role changes, downgrade enforcement, immutable columns, constraints, duplicate grants, and anonymous denial. A zero-row update is a denial, not a success. It leaves a labeled permission-check document. The second uses two independent browser sessions against the real backend and leaves walkthrough/import sample documents. Neither script accepts an admin key. Browser screenshots go into ignored `artifacts/`.
 
 ## Deliberate scope
 
-Owner-only editing and read sharing. No shared editing, realtime sync, comments, version history, email invites, export, other import formats, autosave, or local drafts. Text action labels avoid an extra icon dependency. See [ARCHITECTURE.md](ARCHITECTURE.md), [AI_WORKFLOW.md](AI_WORKFLOW.md), and [SUBMISSION.md](SUBMISSION.md).
+Owners and explicitly granted Writers can edit title and body. Readers can view; only owners manage access. Role changes appear in a recipient’s UI after refresh/reopen; the database enforces downgrades immediately, including stale open tabs. Simultaneous edits use last-save-wins: there is no realtime merging or conflict resolution. No realtime sync, comments, version history, email invites, export, other import formats, autosave, or local drafts. Text action labels avoid an extra icon dependency. See [ARCHITECTURE.md](ARCHITECTURE.md), [AI_WORKFLOW.md](AI_WORKFLOW.md), and [SUBMISSION.md](SUBMISSION.md).

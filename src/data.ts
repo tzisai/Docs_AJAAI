@@ -6,6 +6,8 @@ export const configured = Boolean(url && key)
 export const supabase = createClient(url || 'https://example.supabase.co', key || 'missing-configuration')
 export type Doc = { id: string; owner_id: string; title: string; content: JSONContent; updated_at: string }
 export type Metadata = Omit<Doc, 'content'>
+export type ShareRole = 'reader' | 'writer'
+export type Recipient = { recipient_id: string; role: ShareRole }
 export type DemoUser = { id: string; alias: string }
 export const blankContent: JSONContent = { type: 'doc', content: [{ type: 'paragraph' }] }
 export const message = (error: unknown) => error instanceof Error ? error.message : typeof error === 'object' && error && 'message' in error ? String(error.message) : 'Something went wrong. Please try again.'

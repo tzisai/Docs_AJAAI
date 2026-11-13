@@ -58,3 +58,15 @@
 - Extended the real-backend local owner browser check to save/reload both bulleted and numbered lists as well as heading/marks: PASS. Full browser script still stops at the absent Bob picker option until the seed SQL is run.
 - Supplied review credentials remain outside source ZIP/git. Packaging now generates REVIEWER_ACCOUNTS.md alongside the ZIP and readable docs, without printing passwords.
 - scripts/check-permissions.mjs now checks seeded directory membership before creating a test doc, and checks public signup disabling before declaring full success. Its session cleanup uses local sign-out to avoid revoking unrelated reviewer sessions.
+
+## Requested extension — Reader and Writer roles
+- User explicitly requested editable shared access and the ability to change existing recipients' roles. This supersedes the original owner-only editing scope. Keep realtime merging deferred; concurrent owner/Writer saves use last-save-wins.
+- Added additive migration 202611130002_share_roles.sql. Existing shares default to Reader; role is constrained to reader/writer. Owners alone can update only the role column. Document title/content UPDATE permits owners or current Writers. Ownership/share identity grants remain immutable; policies remain nonrecursive.
+- UI: choose Reader/Writer for a new share; change Role for Bob under Who has access; Writer can rename, format, save, and retain dirty drafts on failure. Only owners see Share. Library and editor label access. Refresh/reopen updates recipient controls; database downgrade enforcement is immediate.
+- `npm run build` and all 7 import tests PASS after role changes.
+- Temporary local PostgreSQL/PGlite checks PASS: initial shares remain Reader; Reader cannot save/self-promote; owner promotion enables Writer save; Writer cannot take ownership, grant access, or manage roles; invalid roles and share-identity changes denied; downgrade blocks stale Writer saves and preserves saved data.
+- Isolated Chromium UI checks (mocked data, not cloud acceptance) PASS Reader→Writer→Reader, Writer title/body save visible to owner, no Writer Share action, role persistence on dialog reopen, downgrade error preserving stale draft, refresh read-only, Escape/focus return, and 390px dialog without overflow/page errors.
+- Extended ordinary-account API and browser scripts with role checks. First live probe stops explicitly because document_shares.role does not exist; handed off exact second migration file for Supabase SQL Editor. Cloud role acceptance is pending that action.
+- Updated README, architecture, submission, dashboard and walkthrough guidance for the explicit scope change. Previous source checkpoint preserved at 22f7944 and artifacts/ajaia-before-roles-22f7944.zip; no deployment initiated before migration.
+- Node 22.22.0 build and all 7 import tests also PASS for this extension. Git remote remains inaccessible to the agent (no HTTPS credentials), so user-side push is required.
+- Verified the existing deployed sign-in shell now opens with correct routing. This resolves the earlier Render variable/rewrite blockers for the original release; the new role build is not yet deployed.

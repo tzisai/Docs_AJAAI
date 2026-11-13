@@ -6,7 +6,7 @@ import { EditorContent, useEditor, useEditorState } from '@tiptap/react'
 import type { Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { blankContent, configured, createDocument, message, supabase } from './data'
-import type { DemoUser, Doc, Metadata } from './data'
+import type { DemoUser, Doc, Metadata, Recipient, ShareRole } from './data'
 import { importText } from './importText'
 import '@fontsource/instrument-sans/400.css'
 import '@fontsource/instrument-sans/500.css'
@@ -62,20 +62,22 @@ function Library({session}: {session: Session}) {
   const navigate = useNavigate()
   const [docs, setDocs] = useState<Metadata[]>([])
   const [users, setUsers] = useState<DemoUser[]>([])
+  const [roles, setRoles] = useState<Record<string, ShareRole>>({})
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const refresh = useCallback(async()=> {
     setLoading(true); setError('')
-    const [documents, directory] = await Promise.all([
+    const [documents, directory, shares] = await Promise.all([
       supabase.from('documents').select('id,owner_id,title,updated_at').order('updated_at',{ascending:false}),
       supabase.from('demo_users').select('id,alias'),
+      supabase.from('document_shares').select('document_id,role').eq('recipient_id',session.user.id),
     ])
-    if(documents.error || directory.error) setError(message(documents.error || directory.error))
-    else {setDocs(documents.data); setUsers(directory.data)}
+    if(documents.error || directory.error || shares.error) setError(message(documents.error || directory.error || shares.error))
+    else {setDocs(documents.data); setUsers(directory.data); setRoles(Object.fromEntries(shares.data.map(s=>[s.document_id,s.role])))}
     setLoading(false)
-  }, [])
+  }, [session.user.id])
   useEffect(()=>{void refresh()},[refresh])
   async function create(file?: File) {
     if(busy) return
@@ -85,23 +87,45 @@ function Library({session}: {session: Session}) {
   }
   function section(title: string, owned: boolean, index: string) {
     const items = docs.filter(doc => (doc.owner_id === session.user.id) === owned)
-    return <section className="document-section"><div className="section-heading"><h2>{title}</h2><span className="count">{String(items.length).padStart(2,'0')}</span></div>{items.length ? <div className="document-list"><div className="list-labels"><span>DOCUMENT</span><span>ACCESS / OWNER</span><span>LAST EDITED</span></div>{items.map(doc=><button className="document-row" key={doc.id} onClick={()=>navigate('/docs/'+doc.id)}><span className="document-name"><span className="doc-symbol" aria-hidden="true">↗</span>{doc.title}</span><span className="ownership">{owned ? 'Owner · you' : `Shared · ${users.find(u=>u.id===doc.owner_id)?.alias || 'Document owner'}`}</span><time dateTime={doc.updated_at}>{new Date(doc.updated_at).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'})}</time></button>)}</div> : <div className="empty"><span className="empty-index">{index}</span><div><h3>{owned ? 'A fresh page is waiting.' : 'Good ideas travel.'}</h3><p>{owned ? 'Create a document or import your notes to begin.' : 'Documents others share with you will appear here, ready to read.'}</p></div></div>}</section>
+    return <section className="document-section"><div className="section-heading"><h2>{title}</h2><span className="count">{String(items.length).padStart(2,'0')}</span></div>{items.length ? <div className="document-list"><div className="list-labels"><span>DOCUMENT</span><span>ACCESS / OWNER</span><span>LAST EDITED</span></div>{items.map(doc=><button className="document-row" key={doc.id} onClick={()=>navigate('/docs/'+doc.id)}><span className="document-name"><span className="doc-symbol" aria-hidden="true">↗</span>{doc.title}</span><span className="ownership">{owned ? 'Owner · you' : `Shared · ${users.find(u=>u.id===doc.owner_id)?.alias || 'Document owner'} · ${roles[doc.id] === 'writer' ? 'Writer' : 'Reader'}`}</span><time dateTime={doc.updated_at}>{new Date(doc.updated_at).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'})}</time></button>)}</div> : <div className="empty"><span className="empty-index">{index}</span><div><h3>{owned ? 'A fresh page is waiting.' : 'Good ideas travel.'}</h3><p>{owned ? 'Create a document or import your notes to begin.' : 'Documents others share with you will appear here, ready to read.'}</p></div></div>}</section>
   }
   return <><Header session={session}/><main className="library"><div className="library-heading"><div><p className="eyebrow">YOUR WORKSPACE</p><h1>Room for your ideas.</h1><p className="muted">A place to write, keep, and share what matters.</p></div><div className="library-actions"><div className="buttons"><button disabled={busy} onClick={()=>fileRef.current?.click()}>Import .txt</button><button className="primary" disabled={busy} onClick={()=>void create()}>{busy ? 'Creating…' : 'New document +'}</button></div><p className="hint">Import UTF-8 .txt · up to 100 KiB</p><input ref={fileRef} type="file" accept=".txt,text/plain" aria-label="Import UTF-8 text file" hidden onChange={e=>{const file=e.target.files?.[0]; if(file) void create(file)}}/></div></div><ErrorText text={error}/>{error && <button onClick={()=>void refresh()}>Reload library</button>}{loading ? <p role="status">Loading your documents…</p> : <>{section('My documents',true,'01')}{section('Shared with me',false,'02')}</>}<footer>Built for a little more focus.</footer></main></>
 }
 function DocumentRoute({session}: {session: Session}) {
   const {id} = useParams()
   const [doc, setDoc] = useState<Doc | null>(null)
+  const [role, setRole] = useState<ShareRole>('reader')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
-  useEffect(()=>{let active=true; setLoading(true); setDoc(null); setError(''); void supabase.from('documents').select('id,owner_id,title,content,updated_at').eq('id',id!).maybeSingle().then(({data,error})=>{if(!active)return; if(error) setError(message(error)); else if(!data) setError('This document is unavailable or has not been shared with you.'); else setDoc(data as Doc); setLoading(false)}); return ()=>{active=false}},[id])
+  useEffect(()=>{
+    let active=true
+    setLoading(true); setDoc(null); setError('')
+    void (async()=>{
+      try {
+        const {data,error}=await supabase.from('documents').select('id,owner_id,title,content,updated_at').eq('id',id!).maybeSingle()
+        if(error) throw error
+        if(!data) throw new Error('This document is unavailable or has not been shared with you.')
+        let access: ShareRole='reader'
+        if(data.owner_id!==session.user.id) {
+          const share=await supabase.from('document_shares').select('role').eq('document_id',id!).eq('recipient_id',session.user.id).maybeSingle()
+          if(share.error) throw share.error
+          if(!share.data) throw new Error('This document is no longer shared with you.')
+          access=share.data.role as ShareRole
+        }
+        if(active) {setRole(access); setDoc(data as Doc)}
+      } catch(error) {if(active) setError(message(error))}
+      finally {if(active) setLoading(false)}
+    })()
+    return ()=>{active=false}
+  },[id,session.user.id])
   if(loading) return <><Header session={session}/><main className="loading" role="status">Opening document…</main></>
   if(!doc) return <><Header session={session}/><main className="loading"><ErrorText text={error}/><button onClick={()=>navigate('/docs')}>Back to library</button></main></>
-  return <DocumentEditor key={doc.id} doc={doc} session={session}/>
+  return <DocumentEditor key={doc.id} doc={doc} session={session} role={role}/>
 }
-function DocumentEditor({doc, session}: {doc: Doc; session: Session}) {
+function DocumentEditor({doc, session, role}: {doc: Doc; session: Session; role: ShareRole}) {
   const owned = doc.owner_id === session.user.id
+  const canEdit = owned || role === 'writer'
   const navigate = useNavigate()
   const [title, setTitle] = useState(doc.title)
   const [baseline, setBaseline] = useState(JSON.stringify({ title: doc.title, content: doc.content }))
@@ -111,18 +135,18 @@ function DocumentEditor({doc, session}: {doc: Doc; session: Session}) {
   const [share, setShare] = useState(false)
   const inFlight = useRef(false)
   const shareButton = useRef<HTMLButtonElement>(null)
-  const dirty = owned && JSON.stringify({title,content:body}) !== baseline
+  const dirty = canEdit && JSON.stringify({title,content:body}) !== baseline
   const dirtyRef = useRef(dirty); dirtyRef.current = dirty
-  const editor = useEditor({extensions:[StarterKit.configure({heading:{levels:[1,2,3]},link:false})],content:doc.content || blankContent,editable:owned,onUpdate:({editor})=>setBody(editor.getJSON()),editorProps:{attributes:{'aria-label':owned?'Document body':'Read-only document body',role:'textbox','aria-multiline':'true','aria-readonly':String(!owned)}}})
+  const editor = useEditor({extensions:[StarterKit.configure({heading:{levels:[1,2,3]},link:false})],content:doc.content || blankContent,editable:canEdit,onUpdate:({editor})=>setBody(editor.getJSON()),editorProps:{attributes:{'aria-label':canEdit?'Document body':'Read-only document body',role:'textbox','aria-multiline':'true','aria-readonly':String(!canEdit)}}})
   const save = useCallback(async()=> {
-    if(!owned || !editor || inFlight.current || !dirty) return
+    if(!canEdit || !editor || inFlight.current || !dirty) return
     const cleanTitle=title.trim()
     if(!cleanTitle || cleanTitle.length>120) {setError('Use a title between 1 and 120 characters, then try Save again.'); return}
     const content=editor.getJSON()
     const snapshot=JSON.stringify({title:cleanTitle,content})
     inFlight.current=true; setSaving(true); setError('')
     try {
-      const {data,error} = await supabase.from('documents').update({title:cleanTitle,content}).eq('id',doc.id).eq('owner_id',session.user.id).select('id').abortSignal(AbortSignal.timeout(15000)).maybeSingle()
+      const {data,error} = await supabase.from('documents').update({title:cleanTitle,content}).eq('id',doc.id).select('id').abortSignal(AbortSignal.timeout(15000)).maybeSingle()
       if(error) throw error
       if(!data) throw new Error('No document was saved. Your access may have changed.')
       setBaseline(snapshot)
@@ -130,7 +154,7 @@ function DocumentEditor({doc, session}: {doc: Doc; session: Session}) {
       setTitle(current=>current===title ? cleanTitle : current)
     } catch(error) {setError('Could not save. Your draft is still here. Check your connection and retry Save. ' + message(error))}
     finally {inFlight.current=false; setSaving(false)}
-  },[owned,editor,dirty,title,doc.id,session.user.id])
+  },[canEdit,editor,dirty,title,doc.id])
   useEffect(()=>{
     const beforeUnload=(event:BeforeUnloadEvent)=>{if(dirtyRef.current){event.preventDefault();event.returnValue=''}}
     const keydown=(event:KeyboardEvent)=>{if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='s'){event.preventDefault(); void save()}}
@@ -145,7 +169,27 @@ function DocumentEditor({doc, session}: {doc: Doc; session: Session}) {
     }
   },[blocker])
   const canLeave=()=>!dirty || window.confirm('Discard unsaved changes?')
-  return <><Header session={session} beforeLeave={canLeave}/><main className="editor-workspace"><div className="editor-heading"><button className="back" onClick={()=>navigate('/docs')}>← Library</button><div className="editor-actions"><span className={'save-state'+(error?' failed':'')} role="status">{owned ? saving?'Saving…':error?'Save failed':dirty?'Unsaved changes':'Saved' : 'Read-only · shared with you'}</span>{owned && <><button className="primary" disabled={!dirty||saving} onClick={()=>void save()}>{saving?'Saving…':'Save'}</button><button ref={shareButton} onClick={()=>setShare(true)}>Share</button></>}</div></div><div className="title-area"><p className="eyebrow">{owned ? 'YOUR DOCUMENT' : 'SHARED DOCUMENT / READ-ONLY'}</p>{owned ? <input className="title-input" aria-label="Document title" maxLength={120} value={title} onChange={e=>{setTitle(e.target.value);setError('')}}/> : <h1 className="readonly-title">{title}</h1>}<p className="hint">{owned ? 'Only you can edit · Save with Ctrl / ⌘ S' : 'You have view access. Only the owner can make changes.'}</p></div><ErrorText text={error}/>{owned && editor && <Toolbar editor={editor}/>}<div className="writing-page"><EditorContent editor={editor}/></div></main>{share && <ShareDialog document={doc} onClose={()=>{setShare(false); requestAnimationFrame(()=>shareButton.current?.focus())}}/>}</>
+  return <><Header session={session} beforeLeave={canLeave}/>
+    <main className="editor-workspace">
+      <div className="editor-heading">
+        <button className="back" onClick={()=>navigate('/docs')}>← Library</button>
+        <div className="editor-actions">
+          <span className={'save-state'+(error?' failed':'')} role="status">{canEdit ? saving?'Saving…':error?'Save failed':dirty?'Unsaved changes':'Saved' : 'Read-only · shared with you'}</span>
+          {canEdit && <button className="primary" disabled={!dirty||saving} onClick={()=>void save()}>{saving?'Saving…':'Save'}</button>}
+          {owned && <button ref={shareButton} onClick={()=>setShare(true)}>Share</button>}
+        </div>
+      </div>
+      <div className="title-area">
+        <p className="eyebrow">{owned ? 'YOUR DOCUMENT / OWNER' : canEdit ? 'SHARED DOCUMENT / WRITER' : 'SHARED DOCUMENT / READ-ONLY'}</p>
+        {canEdit ? <input className="title-input" aria-label="Document title" maxLength={120} value={title} onChange={e=>{setTitle(e.target.value);setError('')}}/> : <h1 className="readonly-title">{title}</h1>}
+        <p className="hint">{owned ? 'You manage access · Save with Ctrl / ⌘ S' : canEdit ? 'You can edit · Only the owner manages sharing · Save with Ctrl / ⌘ S' : 'You have read access. Ask the owner for Writer access to make changes.'}</p>
+      </div>
+      <ErrorText text={error}/>
+      {canEdit && editor && <Toolbar editor={editor}/>}
+      <div className="writing-page"><EditorContent editor={editor}/></div>
+    </main>
+    {share && <ShareDialog document={doc} onClose={()=>{setShare(false); requestAnimationFrame(()=>shareButton.current?.focus())}}/>}
+  </>
 }
 function Toolbar({editor}: {editor: Editor}) {
   const active=useEditorState({editor,selector:({editor})=>({bold:editor.isActive('bold'),italic:editor.isActive('italic'),underline:editor.isActive('underline'),h1:editor.isActive('heading',{level:1}),h2:editor.isActive('heading',{level:2}),h3:editor.isActive('heading',{level:3}),bullet:editor.isActive('bulletList'),ordered:editor.isActive('orderedList')})})
@@ -167,21 +211,72 @@ function keepDialogFocus(event: React.KeyboardEvent<HTMLDialogElement>) {
 function ShareDialog({document: doc,onClose}: {document: Doc; onClose:()=>void}) {
   const ref=useRef<HTMLDialogElement>(null)
   const [users,setUsers]=useState<DemoUser[]>([])
-  const [recipients,setRecipients]=useState<string[]>([])
+  const [recipients,setRecipients]=useState<Recipient[]>([])
   const [selected,setSelected]=useState('')
+  const [role,setRole]=useState<ShareRole>('reader')
   const [loading,setLoading]=useState(true)
   const [busy,setBusy]=useState(false)
   const [error,setError]=useState('')
   const [notice,setNotice]=useState('')
   useEffect(()=>{const dialog=ref.current;dialog?.showModal();return()=>dialog?.close()},[])
-  useEffect(()=>{let active=true; void Promise.all([supabase.from('demo_users').select('id,alias').neq('id',doc.owner_id),supabase.from('document_shares').select('recipient_id').eq('document_id',doc.id)]).then(([directory,shares])=>{if(!active)return; if(directory.error||shares.error)setError(message(directory.error||shares.error));else{setUsers(directory.data);setRecipients(shares.data.map(s=>s.recipient_id))}setLoading(false)});return()=>{active=false}},[doc.id,doc.owner_id])
+  useEffect(()=>{
+    let active=true
+    void Promise.all([
+      supabase.from('demo_users').select('id,alias').neq('id',doc.owner_id),
+      supabase.from('document_shares').select('recipient_id,role').eq('document_id',doc.id),
+    ]).then(([directory,shares])=>{
+      if(!active)return
+      if(directory.error||shares.error)setError(message(directory.error||shares.error))
+      else{setUsers(directory.data);setRecipients(shares.data as Recipient[])}
+      setLoading(false)
+    })
+    return()=>{active=false}
+  },[doc.id,doc.owner_id])
   async function grant(event: React.FormEvent) {
-    event.preventDefault();if(!selected||busy)return;setBusy(true);setError('');setNotice('')
-    const {data,error}=await supabase.from('document_shares').insert({document_id:doc.id,owner_id:doc.owner_id,recipient_id:selected}).select('recipient_id').maybeSingle()
-    if(error && error.code!=='23505')setError(message(error));else if(!error&&!data)setError('No access was granted. Reload and try again.');else{setRecipients(current=>[...new Set([...current,selected])]);setNotice('Read access granted. They can now open this document.');setSelected('')}
-    setBusy(false)
+    event.preventDefault();if(!selected||busy)return
+    setBusy(true);setError('');setNotice('')
+    try {
+      const result=await supabase.from('document_shares').insert({document_id:doc.id,owner_id:doc.owner_id,recipient_id:selected,role}).select('recipient_id,role').maybeSingle()
+      if(result.error && result.error.code!=='23505')throw result.error
+      // A concurrent duplicate preserves the existing grant, never silently changes its role.
+      const existing=result.error ? await supabase.from('document_shares').select('recipient_id,role').eq('document_id',doc.id).eq('recipient_id',selected).maybeSingle() : result
+      if(existing.error)throw existing.error
+      if(!existing.data)throw new Error('No access was confirmed. Reload and try again.')
+      const recipient=existing.data as Recipient
+      setRecipients(current=>[...current.filter(r=>r.recipient_id!==selected),recipient])
+      setNotice(result.error ? 'Already shared. Use the role control below to change access.' : `${role==='writer'?'Writer':'Read'} access granted. They can now open this document.`)
+      setSelected('')
+    } catch(error){setError(message(error))}
+    finally{setBusy(false)}
   }
-  return <dialog ref={ref} onKeyDown={keepDialogFocus} onCancel={onClose} onClick={e=>{if(e.target===ref.current)onClose()}} aria-labelledby="share-title"><div className="dialog-head"><p className="eyebrow">SHARE YOUR IDEAS</p><button aria-label="Close share dialog" onClick={onClose}>Close</button></div><h2 id="share-title">A little more perspective.</h2><p className="muted">Invite a demo teammate to read “{doc.title}”.<br/>You remain the only editor.</p>{loading?<p role="status">Loading teammates…</p>:<form onSubmit={grant}><div className="share-picker"><label htmlFor="share-recipient">Give read access</label><select id="share-recipient" autoFocus value={selected} onChange={e=>setSelected(e.target.value)} required><option value="">Choose a teammate</option>{users.filter(u=>!recipients.includes(u.id)).map(u=><option key={u.id} value={u.id}>{u.alias}</option>)}</select></div><button className="primary" disabled={!selected||busy}>{busy?'Sharing…':'Share document'}</button></form>}<ErrorText text={error}/>{notice&&<p className="success" role="status">{notice}</p>}<div className="recipients"><h3>Who has access</h3><p>You <span>Owner · can edit</span></p>{recipients.map(id=><p key={id}>{users.find(u=>u.id===id)?.alias||'Demo teammate'}<span>Can read</span></p>)}</div></dialog>
+  async function changeRole(recipientId: string, nextRole: ShareRole) {
+    if(busy)return
+    setBusy(true);setError('');setNotice('')
+    try {
+      const {data,error}=await supabase.from('document_shares').update({role:nextRole}).eq('document_id',doc.id).eq('recipient_id',recipientId).select('recipient_id,role').maybeSingle()
+      if(error)throw error
+      if(!data)throw new Error('Role was not changed. Your access may have changed; reload and retry.')
+      setRecipients(current=>current.map(r=>r.recipient_id===recipientId ? data as Recipient : r))
+      setNotice(`Access changed to ${nextRole==='writer'?'Writer':'Reader'}. Ask them to refresh or reopen the document.`)
+    } catch(error){setError('Could not change access. '+message(error))}
+    finally{setBusy(false)}
+  }
+  return <dialog ref={ref} onKeyDown={keepDialogFocus} onCancel={onClose} onClick={e=>{if(e.target===ref.current)onClose()}} aria-labelledby="share-title">
+    <div className="dialog-head"><p className="eyebrow">SHARE YOUR IDEAS</p><button aria-label="Close share dialog" onClick={onClose}>Close</button></div>
+    <h2 id="share-title">A little more perspective.</h2>
+    <p className="muted">Share “{doc.title}” with a demo teammate.<br/>Readers can view. Writers can edit and save. Only you manage access.</p>
+    {loading?<p role="status">Loading teammates…</p>:<form onSubmit={grant}>
+      <div className="share-picker"><label htmlFor="share-recipient">Give access</label><select id="share-recipient" autoFocus value={selected} disabled={busy} onChange={e=>setSelected(e.target.value)} required><option value="">Choose a teammate</option>{users.filter(u=>!recipients.some(r=>r.recipient_id===u.id)).map(u=><option key={u.id} value={u.id}>{u.alias}</option>)}</select></div>
+      <div className="share-picker"><label htmlFor="new-share-role">Role</label><select id="new-share-role" value={role} disabled={busy} onChange={e=>setRole(e.target.value as ShareRole)}><option value="reader">Reader</option><option value="writer">Writer</option></select></div>
+      <button className="primary" disabled={!selected||busy}>{busy?'Saving access…':'Share document'}</button>
+    </form>}
+    <ErrorText text={error}/>{notice&&<p className="success" role="status">{notice}</p>}
+    <div className="recipients"><h3>Who has access</h3><p>You <span>Owner · can edit and share</span></p>{recipients.map(recipient=>{
+      const alias=users.find(u=>u.id===recipient.recipient_id)?.alias||'Demo teammate'
+      return <div className="recipient-row" key={recipient.recipient_id}><span>{alias}</span><select aria-label={`Role for ${alias}`} value={recipient.role} disabled={busy} onChange={e=>void changeRole(recipient.recipient_id,e.target.value as ShareRole)}><option value="reader">Reader</option><option value="writer">Writer</option></select></div>
+    })}</div>
+  </dialog>
 }
+
 const router=createBrowserRouter([{path:'*',element:<App/>}])
 ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><RouterProvider router={router}/></React.StrictMode>)

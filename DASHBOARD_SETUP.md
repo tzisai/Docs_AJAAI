@@ -3,9 +3,10 @@
 ## Supabase
 
 1. Open the existing project → SQL Editor → New query. Paste the entire contents of `supabase/migrations/202611130001_documents.sql` and Run **once**. It is a transactional, versioned initial migration.
-2. Authentication → Users → Add user → Create new user. Create disposable Alice and Bob accounts with email/password and enable **Auto Confirm User**. Keep these passwords unique to this demo. Do not use personal accounts.
-3. Authentication → Sign In / Providers → disable **Allow new users to sign up**. Keep email/password login enabled. (The API check on 2026-11-13 found signups enabled.)
-4. Copy the two IDs from Authentication → Users. In SQL Editor run this seed statement, replacing both UUID placeholders:
+2. For Reader/Writer sharing, run `supabase/migrations/202611130002_share_roles.sql` once after the initial migration. On an existing installation, run only this new migration. Existing shares stay Reader.
+3. Authentication → Users → Add user → Create new user. Create disposable Alice and Bob accounts with email/password and enable **Auto Confirm User**. Keep these passwords unique to this demo. Do not use personal accounts.
+4. Authentication → Sign In / Providers → disable **Allow new users to sign up**. Keep email/password login enabled. (The API check on 2026-11-13 found signups enabled.)
+5. Copy the two IDs from Authentication → Users. In SQL Editor run this seed statement, replacing both UUID placeholders:
 
 ```sql
 insert into public.demo_users (id, alias) values
