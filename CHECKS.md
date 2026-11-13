@@ -19,3 +19,32 @@
 - Git remote access: BLOCKED, `fatal: could not read Username for 'https://github.com': No such device or address`. User must authenticate Git and push main, or connect a repository integration.
 - Product URL supplied: https://docs-ajaai.onrender.com. First probe returned 503 with `x-render-routing: suspend-by-user`. User reports resuming the site; recheck pending.
 - Navigation: replaced a proposed ad hoc history guard with React Router useBlocker before browser acceptance checks. Keep drafts in memory only.
+
+## Stage 0 — local build and deployed shell
+- PASS: https://docs-ajaai.onrender.com now responds HTTP 200 with the Ajaia Vite shell after the user resumed the service. Initial 503/404 are resolved.
+- Local first slice commit: 0846f7d. Agent git authentication is still unavailable; user-side push appears to have deployed the shell. Exact deployed commit not yet confirmed.
+- Stage 0 is satisfied as an intermediate shell check. Final backend acceptance remains pending.
+
+## SQL validation (temporary local PostgreSQL engine, not cloud acceptance)
+- Applied the exact migration using PGlite with Supabase-style auth.uid(), authenticated/anon roles, and two seeded UUIDs. All checks passed.
+- Alice create derives owner from session; invalid root/title rejected; owner_id and updated_at updates denied by column privileges.
+- Bob private read/update: zero rows. Bob grant using Alice owner: RLS denial. Bob forged-owner grant: composite FK denial.
+- Alice grant allows Bob SELECT; duplicate and self-sharing rejected. Bob shared UPDATE stays zero rows; share grant denied. Owner still has original data and can save.
+- Anonymous SELECT denied on documents, shares, and directory. No policy recursion encountered.
+- This validates schema behavior locally only. Real Supabase/API and independent browser sessions are still required.
+
+## Focused UI QA and cloud setup follow-up
+- Isolated local Chromium UI tests with mocked data (NOT real backend acceptance): PASS title/format persistence across reload, active toolbar states, Cmd/Ctrl+S, newer edits remaining dirty during an in-flight save, failed save retaining draft and successful retry.
+- Found and fixed share picker label text including option content: use explicit external label. Found and fixed missing focus return on Escape: return focus to Share explicitly after closing.
+- PASS after fixes: owner excluded from picker, grant UI, Escape dismissal/focus return, dirty Library navigation cancellation, literal fixture import, 390px toolbar wrapping with no horizontal overflow. No page errors. Inspected desktop/mobile editor screenshots for hierarchy/readability/focus.
+- Live root browser rendered setup message: missing VITE Supabase env inputs at build time. Handed off exact Render Environment names and rebuild instruction.
+- Live direct `/docs/:id` returned Not Found: missing SPA rewrite. Handed off `/*` → `/index.html` Rewrite instruction.
+- Latest real anonymous API probe now returns 401/42501 permission denied for documents (table exists); full real-user RLS checks still pending. Auth settings still report disable_signup=false.
+- Created ignored `.env.review.local` template for ordinary Alice/Bob review credentials. Permission script stops with an explicit missing-credential error rather than using privileged credentials or a mock.
+- Draft package created and ZIP entries inspected: 33 entries, no local env, node_modules, build output, or browser artifacts. Video/Drive and live release claims remain explicitly incomplete.
+
+## Local verification checkpoint
+- Exact Node 22.22.0 binary (temporary official Node download): TypeScript build, Vite build, and all 7 import tests PASS. Initial npm-exec attempt selected the system Node, so it was not counted as Node 22 evidence.
+- Extended isolated UI checks: PASS canceled browser Back preserves URL/draft; dialog Tab/Shift+Tab cycles inside modal. Added a small explicit boundary loop after observing native dialog Tab could move focus to browser chrome at its last control.
+- No further optional visual work planned. Required live flow remains blocked on Render VITE env/rewrite and ordinary demo credentials, not on local build.
+- Latest local app source will be checkpointed with documentation and scripts. No deployed release commit has been verified yet.
