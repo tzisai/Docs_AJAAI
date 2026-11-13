@@ -9,7 +9,7 @@ The library/image fix requires no new migration: cards do not query documents.pr
 1. Open the existing project → SQL Editor → New query. Paste the entire contents of `supabase/migrations/202611130001_documents.sql` and Run **once**. It is a transactional, versioned initial migration.
 2. For Reader/Writer sharing, run `supabase/migrations/202611130002_share_roles.sql` once after the initial migration. On an existing installation, run only this new migration. Existing shares stay Reader.
 3. Authentication → Users → Add user → Create new user. Create disposable Alice and Bob accounts with email/password and enable **Auto Confirm User**. Keep these passwords unique to this demo. Do not use personal accounts.
-4. Authentication → Sign In / Providers → disable **Allow new users to sign up**. Keep email/password login enabled. (The API check on 2026-11-13 found signups enabled.)
+4. Authentication → Sign In / Providers → **enable Allow new users to sign up**, then Save changes. This is required for the newly requested Create account button and replaces the earlier demo-only restriction. Keep email/password enabled. Confirm email is currently OFF, giving immediate sign-in after registration. If you turn confirmation ON, set Site URL to https://docs-ajaai.onrender.com and allow https://docs-ajaai.onrender.com/** plus http://localhost:5173/** in URL Configuration.
 5. Copy the two IDs from Authentication → Users. In SQL Editor run this seed statement, replacing both UUID placeholders:
 
 ```sql

@@ -11,7 +11,9 @@
     "test:permissions": "node tests/integration/check-permissions.mjs",
     "test:browser": "node tests/integration/browser-check.mjs",
     "test:files": "node tests/integration/check-files.mjs",
-    "test:delete": "node tests/integration/check-delete.mjs"
+    "test:delete": "node tests/integration/check-delete.mjs",
+    "test:signup": "node tests/integration/browser-signup.mjs",
+    "test:registration": "node tests/integration/check-signup.mjs"
   },
   "dependencies": {
     "@fontsource/instrument-sans": "^5.0.0",

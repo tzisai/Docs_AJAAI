@@ -11,6 +11,7 @@ import { importText } from './importText'
 import { downloadDocument, importIntoDraft } from './documentFiles'
 import { LIBRARY_COLUMNS, libraryDocument } from './library'
 import { deleteDocument } from './deleteDocument'
+import { registerAccount } from './account'
 import { DocumentImage } from './DocumentImage'
 import { embeddedImageBytes, inlineImageNode, MAX_DOCUMENT_IMAGE_BYTES, validateImage } from './imageFiles'
 import '@fontsource/instrument-sans/400.css'
@@ -47,17 +48,58 @@ function Protected({ session, children }: {session: Session | null; children: Re
 }
 function ErrorText({text}: {text: string}) { return text ? <p className="error" role="alert">{text}</p> : null }
 function Login() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  async function submit(event: React.FormEvent) {
-    event.preventDefault(); setBusy(true); setError('')
-    try { const {error} = await supabase.auth.signInWithPassword({email: email.trim(), password}); if (error) throw error }
-    catch (error) { setError(message(error)) } finally { setBusy(false) }
+  const [mode,setMode]=useState<'signin'|'signup'>('signin')
+  const [email,setEmail]=useState('')
+  const [password,setPassword]=useState('')
+  const [confirmation,setConfirmation]=useState('')
+  const [busy,setBusy]=useState(false)
+  const [error,setError]=useState('')
+  const [notice,setNotice]=useState('')
+  const signup=mode==='signup'
+  function switchMode(){
+    setMode(current=>current==='signin'?'signup':'signin')
+    setPassword('');setConfirmation('');setError('');setNotice('')
   }
-  return <main className="login"><div className="login-brand">AJAIA <span>DOCUMENTS / 01</span></div><div className="login-grid"><section><p className="eyebrow">A LITTLE SPACE TO THINK</p><h1>Good ideas<br/>start here.</h1><p className="intro">Write with focus.<br/>Share with intention.</p></section><form onSubmit={submit} className="login-form"><p className="eyebrow">YOUR WORKSPACE</p><h2>Welcome back.</h2><p className="muted">Sign in with your demo account to continue.</p><label>Email<input type="email" autoComplete="username" required value={email} onChange={e=>setEmail(e.target.value)}/></label><label>Password<input type="password" autoComplete="current-password" required value={password} onChange={e=>setPassword(e.target.value)}/></label><ErrorText text={error}/><button className="primary" disabled={busy}>{busy ? 'Signing in…' : 'Sign in →'}</button><p className="hint">A private demo workspace. Accounts are provided by the reviewer guide.</p></form></div><footer>Less noise. More room for your words.</footer></main>
+  async function submit(event: React.FormEvent){
+    event.preventDefault();if(busy)return
+    setBusy(true);setError('');setNotice('')
+    try{
+      if(signup){
+        const redirect=new URL('/login',window.location.origin)
+        redirect.searchParams.set('next',safeReturn(new URLSearchParams(window.location.search).get('next')))
+        const result=await registerAccount(email,password,confirmation,redirect.toString())
+        setPassword('');setConfirmation('')
+        if(result==='confirm-email')setNotice('Check your email for a confirmation link, then return here to sign in. If you already have an account, sign in instead.')
+        // A returned session triggers the existing auth listener and deep-link routing.
+      }else{
+        const {error}=await supabase.auth.signInWithPassword({email:email.trim(),password})
+        if(error)throw error
+      }
+    }catch(error){setError(message(error))}
+    finally{setBusy(false)}
+  }
+  return <main className="login">
+    <div className="login-brand">AJAIA <span>DOCUMENTS / 01</span></div>
+    <div className="login-grid">
+      <section><p className="eyebrow">A LITTLE SPACE TO THINK</p><h1>Good ideas<br/>start here.</h1><p className="intro">Write with focus.<br/>Share with intention.</p></section>
+      <form onSubmit={submit} className="login-form" aria-label={signup?'Create account':'Sign in'}>
+        <p className="eyebrow">YOUR WORKSPACE</p>
+        <h2>{notice?'Check your inbox.':signup?'Create your account.':'Welcome back.'}</h2>
+        <p className="muted">{signup?'A new space for your next good idea.':'Sign in to pick up where you left off.'}</p>
+        {notice?<p className="success auth-notice" role="status">{notice}</p>:<>
+          <label>Email<input type="email" autoComplete={signup?'email':'username'} required disabled={busy} value={email} onChange={event=>setEmail(event.target.value)}/></label>
+          <label>Password<input type="password" autoComplete={signup?'new-password':'current-password'} minLength={signup?8:undefined} aria-describedby={signup?'signup-password-hint':undefined} required disabled={busy} value={password} onChange={event=>setPassword(event.target.value)}/></label>
+          {signup&&<><p className="hint password-hint" id="signup-password-hint">At least 8 characters. Use a password unique to this account.</p><label>Confirm password<input type="password" autoComplete="new-password" minLength={8} required disabled={busy} value={confirmation} onChange={event=>setConfirmation(event.target.value)}/></label></>}
+          <ErrorText text={error}/>
+          <button className="primary" type="submit" disabled={busy}>{busy?(signup?'Creating account…':'Signing in…'):(signup?'Create account →':'Sign in →')}</button>
+        </>}
+        <div className="auth-switch"><span>{signup?'Already have an account?':'New here?'}</span><button type="button" disabled={busy} onClick={switchMode}>{signup?'Back to sign in':'Create an account'}</button></div>
+        <p className="hint">Your documents stay private until you share them.</p>
+      </form>
+    </div><footer>Less noise. More room for your words.</footer>
+  </main>
 }
+
 function Header({session, beforeLeave = () => true}: {session: Session; beforeLeave?: () => boolean}) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)

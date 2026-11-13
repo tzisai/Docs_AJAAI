@@ -2,7 +2,7 @@
 
 Product URL: https://docs-ajaai.onrender.com
 
-**Status: corrected source is verified locally against real Supabase; deployment/video/Drive verification remain pending.** The library no longer depends on `documents.preview`, and images now save inside the document JSON. The library/image correction needs no new SQL or Storage setup. The final added Delete action needs only owner-delete migration 004. All 29 unit checks pass; real file/persistence checks confirm saved cards, Reader/Writer permissions, and a maximum-size 2 MiB image save/reopen. The real two-session local browser flow passes create/format/save/refresh, embedded images, role changes, offline retry, import and download. CHECKS.md records actual outcomes; do not treat the deployed URL as the corrected release until it is redeployed and checked.
+**Status: corrected source is verified locally against real Supabase; deployment/video/Drive verification remain pending.** The library no longer depends on `documents.preview`, and images now save inside the document JSON. The library/image correction needs no new SQL or Storage setup. The final added Delete action needs only owner-delete migration 004. All 36 unit checks pass; real file/persistence checks confirm saved cards, Reader/Writer permissions, and a maximum-size 2 MiB image save/reopen. The real two-session local browser flow passes create/format/save/refresh, embedded images, role changes, offline retry, import and download. CHECKS.md records actual outcomes; do not treat the deployed URL as the corrected release until it is redeployed and checked.
 
 ## Folder contents
 
@@ -24,13 +24,15 @@ The ZIP excludes node_modules, dist, local env files, API.env, browser artifacts
 
 ## Disposable reviewer accounts
 
-Alice and Bob both sign in successfully. Their disposable credentials are in `REVIEWER_ACCOUNTS.md` alongside the source ZIP. The directory now includes both accounts. Keep public signups disabled. `supabase/seed-demo.sql` documents the configured IDs. Do not include cloud admin credentials. Use separate browser sessions to review sharing.
+Alice and Bob both sign in successfully. Their disposable credentials are in `REVIEWER_ACCOUNTS.md` alongside the source ZIP. The directory now includes both accounts. Enable public signups for the requested Create account flow; accounts remain isolated by document RLS. `supabase/seed-demo.sql` documents the configured IDs. Do not include cloud admin credentials. Use separate browser sessions to review sharing.
 
 ## Working locally
 
-Implemented: auth restoration and direct-link return; owned/shared document cards with owner-only Delete confirmation; create/rename; rich-text formatting; explicit atomic title/body/image Save with dirty tracking and retry; text import as a new document or appended to an existing draft; images inside the writing page; plain-text Download; Reader/Writer roles with owner-only sharing. The library projects text leaves instead of querying a missing preview column or fetching image payloads. Optional sharing-detail failures cannot hide the document list. All 29 unit checks pass. The ordinary-account role suite passes 35 real checks; file/API checks verify exact embedded image persistence, current permissions, and a 2 MiB payload without new SQL.
+Implemented: visible Create account button and registration form with confirmation/session states; auth restoration and direct-link return; owned/shared document cards with owner-only Delete confirmation; create/rename; rich-text formatting; explicit atomic title/body/image Save with dirty tracking and retry; text import as a new document or appended to an existing draft; images inside the writing page; plain-text Download; Reader/Writer roles with owner-only sharing. The library projects text leaves instead of querying a missing preview column or fetching image payloads. Optional sharing-detail failures cannot hide the document list. All 36 unit checks pass. The ordinary-account role suite passes 35 real checks; file/API checks verify exact embedded image persistence, current permissions, and a 2 MiB payload without new SQL.
 
 ## Missing / incomplete
+
+- Enable Supabase Authentication → Allow new users to sign up and Save changes for the new registration feature. It is still disabled in the latest verified settings. No new SQL is required. Mocked registration UI/unit checks pass; actual registration is pending this dashboard toggle.
 
 - Push and deploy the corrected source from an authenticated Git terminal. Agent GitHub HTTPS credentials are unavailable. **No new migration is required.**
 - For the added Delete action, apply only `supabase/migrations/202611130004_owner_delete.sql`. Live owner-delete acceptance is pending this permission update; listing/saving do not depend on it.

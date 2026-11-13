@@ -1,12 +1,18 @@
 # Architecture
 
-React, TypeScript, Vite, and Tiptap 3 run as a static SPA on Render. Supabase provides email/password Auth and Postgres with RLS. The app has login, a document card library, and an editor with Share. Instrument Sans is bundled locally, with Georgia for the writing body. The requested David Estrada reference informs the dark/light contrast, warm orange accent, large headings, and card interactions. The page remains white, controls retain visible focus, and reduced-motion settings disable animation.
+React, TypeScript, Vite, and Tiptap 3 run as a static SPA on Render. Supabase provides email/password Auth and Postgres with RLS. The app has sign-in/create-account modes on the login route, a document card library, and an editor with Share. Instrument Sans is bundled locally, with Georgia for the writing body. The requested David Estrada reference informs the dark/light contrast, warm orange accent, large headings, and card interactions. The page remains white, controls retain visible focus, and reduced-motion settings disable animation.
 
 ## Authentication and data flow
 
 The app restores the initial Supabase session before routing. Signed-out editor links retain `/docs/:id` through login. The publishable key and current user's session are the only browser credentials. There is no privileged frontend service or exposed Auth users table.
 
 Creation, text import, editing, and images use `documents.content` JSONB. Save captures title/body together and permits one request in flight. A returned row confirms success; zero rows are failure. Successful requests update the baseline snapshot without discarding edits made during the request. Failures and 15-second timeouts keep the in-memory draft. Router blocking, sign-out confirmation, and supported beforeunload warnings protect dirty work. No autosave/local recovery; owner/Writer tabs use last-save-wins.
+
+## Registration
+
+Sign-in has an explicit Create an account button that switches the same route to email/password/confirmation fields. Client validation precedes `supabase.auth.signUp`; the provider enforces its own password/rate rules. A returned session flows through the existing auth listener and safe deep-link routing. If no session is returned, the UI asks the user to confirm email and offers Back to sign in; it does not claim they are authenticated. Passwords clear when switching modes or after success. Confirmation redirects stay on the app origin and retain only a validated document destination. Signup-disabled/provider errors remain visible for retry.
+
+The new user owns documents through auth.uid(), independent of the manually seeded contact directory. Existing RLS still denies access to others' private documents. Registration needs only the existing Auth configuration toggle, not a schema migration or privileged browser key. The real registration test deliberately requires email auto-confirmation to avoid sending test email; the confirmation-required UI is covered with mocked API responses.
 
 ## Library regression and correction
 
@@ -20,7 +26,7 @@ The initial document/share schema and Reader/Writer migrations support editing/s
 
 Documents have UUID ID, session-derived immutable owner, trimmed title constraints, JSON doc/array root shape, and a database timestamp. Browser INSERT/UPDATE privileges permit only title/content. RLS allows SELECT to the owner or a granted recipient, and UPDATE to the owner or a current Writer. Reader writes and stale downgraded Writer writes return zero rows and are not treated as saves.
 
-Shares have a unique document/recipient pair, seeded-recipient FK, no self-sharing, and a composite document/owner FK proving ownership. SELECT checks owner/recipient directly; INSERT checks owner; UPDATE is owner-only and column privileges permit only role. This avoids policy recursion. Writer access never permits ownership changes or share management. Anonymous roles have no document/directory/share grants. Public signups remain disabled in dashboard settings. Migration 004 grants DELETE with a policy requiring the current user to be the owner. Readers/Writers cannot delete, even though they can read. The UI asks for permanent confirmation and removes a card only after DELETE returns an affected ID. Zero rows or errors preserve the card. The existing FK cascades sharing-grant deletion; embedded images disappear with the same document row.
+Shares have a unique document/recipient pair, seeded-recipient FK, no self-sharing, and a composite document/owner FK proving ownership. SELECT checks owner/recipient directly; INSERT checks owner; UPDATE is owner-only and column privileges permit only role. This avoids policy recursion. Writer access never permits ownership changes or share management. Anonymous roles have no document/directory/share grants. Self-service signup is now a requested feature; its Auth dashboard toggle must be enabled. New users start with no document grants and do not need a seeded directory row to own documents. The picker remains manually seeded; no Auth users table is exposed. Migration 004 grants DELETE with a policy requiring the current user to be the owner. Readers/Writers cannot delete, even though they can read. The UI asks for permanent confirmation and removes a card only after DELETE returns an affected ID. Zero rows or errors preserve the card. The existing FK cascades sharing-grant deletion; embedded images disappear with the same document row.
 
 The JSON root constraint is not a full Tiptap schema/body-size validator. A production boundary should validate allowed nodes and resource limits server-side. The demo uses manually provisioned ordinary accounts and UI validation.
 
@@ -34,7 +40,7 @@ The UI limits each file to 2 MiB and 4096px per side, and embedded image bytes t
 
 UTF-8 .txt conversion validates extension/size/content/encoding, preserves blank lines as empty paragraphs, and treats markup literally. New-document import uses the filename stem as title. Existing-draft import decodes first, reads the latest draft afterward, and appends nodes so asynchronous reads cannot overwrite newer edits. Invalid input never changes the draft. The original text binary is discarded.
 
-The runnable tests/ folder contains 29 unit checks in 5 suites, integration API checks, and a real two-session browser walkthrough. The delayed-import regression and missing-preview-column compatibility tests exercise observed failure modes. CHECKS.md distinguishes real cloud/API/browser results from historical mocked checks. Browser QA covers Save/reopen, owner-card visibility, inline image persistence, sharing/downgrade, offline retry, import, download, and narrow layouts.
+The runnable tests/ folder contains 36 unit checks in 6 suites, integration API checks, and a real two-session browser walkthrough. The delayed-import regression and missing-preview-column compatibility tests exercise observed failure modes. CHECKS.md distinguishes real cloud/API/browser results from historical mocked checks. Browser QA covers Save/reopen, owner-card visibility, inline image persistence, sharing/downgrade, offline retry, import, download, and narrow layouts.
 
 Render builds with npm ci on Node 22.22.0 and serves dist with an SPA rewrite. VITE values are public build inputs. A corrected local build must still be pushed and deployed before it is claimed as the live release candidate.
 

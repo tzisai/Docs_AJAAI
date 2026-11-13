@@ -30,7 +30,7 @@ npm run build
 npm run preview
 ```
 
-All **29 unit checks in 5 suites** are in [tests/](tests/README.md). The delayed-import regression test proves that edits made while a file is being decoded survive. Library tests cover missing preview columns and image-only documents. Image tests check validation and exact embedded bytes. Build includes strict TypeScript checking of the app. No lint script is configured.
+All **36 unit checks in 6 suites** are in [tests/](tests/README.md). The delayed-import regression test proves that edits made while a file is being decoded survive. Library tests cover missing preview columns and image-only documents. Image tests check validation and exact embedded bytes. Build includes strict TypeScript checking of the app. No lint script is configured.
 
 ## Database and demo accounts
 
@@ -42,7 +42,7 @@ For a new project, run these SQL files once, in order:
 
 **Existing demo project:** the library/image fix needs no new SQL. For the newly requested Delete button, run only `202611130004_owner_delete.sql` once to grant owner-only deletion. Listing/saving still work before it is applied; a denied deletion leaves the card intact. `202611130003_previews_attachments.sql` is retained as a legacy optional migration from the earlier attachment implementation. The current app does not use its generated column or bucket. Do not run it to fix saving or images, and do not rerun the initial schema. If already applied, it can remain installed.
 
-Create two disposable email/password users in Supabase Authentication → Users with Auto Confirm enabled, disable public signups, and seed only their UUIDs and aliases:
+Create two disposable email/password users in Supabase Authentication → Users with Auto Confirm enabled, and seed only their UUIDs and aliases:
 
 ```sql
 insert into public.demo_users (id, alias) values
@@ -51,6 +51,17 @@ insert into public.demo_users (id, alias) values
 ```
 
 For the configured project, `supabase/seed-demo.sql` contains IDs verified using ordinary Alice/Bob sign-in. The directory already contains both accounts. The browser cannot modify it or query Auth users. Disposable login details are generated into `REVIEWER_ACCOUNTS.md` next to the source ZIP, outside git and the ZIP. Use sample content only and rotate credentials after review.
+
+## Create an account
+
+The sign-in page includes a visible **Create an account** button. Registration asks for email, password (at least 8 characters), and confirmation. With Supabase Confirm email OFF, successful signup opens the private workspace immediately. With confirmation ON, the form shows a check-your-inbox message and Back to sign in. The confirmation URL preserves a safe document destination through login.
+
+For this requested feature, **enable Allow new users to sign up** in Supabase Authentication → Sign In / Providers and Save changes. This reverses the earlier demo-only signup restriction. Keep email/password enabled. No SQL migration is needed. Confirm email is currently OFF for immediate demo registration; if enabling it, configure your email delivery and Authentication → URL Configuration:
+
+- Site URL: `https://docs-ajaai.onrender.com`
+- Allowed redirect URLs: `https://docs-ajaai.onrender.com/**`, and `http://localhost:5173/**` for local testing.
+
+New accounts can create/save their own documents without a seeded alias and cannot see other users' private documents. The sharing picker remains the deliberately seeded demo-contact directory; self-service accounts are not automatically published there. They can share their own documents with those contacts. Add an alias through the existing seed pattern if a new account must become a selectable recipient.
 
 ## Render
 
@@ -92,9 +103,11 @@ npm run test:files
 npm run test:delete
 npx playwright install chromium
 npm run test:browser
+npm run test:signup
+npm run test:registration
 ```
 
-The permission suite tests real document RLS and role changes (35 checks). The file suite tests real text/image atomic persistence, owner library projections, Reader/Writer access, anonymous denial, and a 2 MiB image save/reopen, without new SQL. The deletion suite creates a new fixture, verifies denied Reader/Writer/anonymous requests, deletes it as owner, and checks sharing-grant cascade cleanup. It requires migration 004. The browser suite uses two isolated sessions. Use `PRODUCT_URL=http://localhost:5173` for local UI with real Supabase or the live URL for release acceptance. Tests create labeled sample documents and never edit an existing user document. Screenshots/download artifacts are ignored.
+The permission suite tests real document RLS and role changes (35 checks). The file suite tests real text/image atomic persistence, owner library projections, Reader/Writer access, anonymous denial, and a 2 MiB image save/reopen, without new SQL. The deletion suite creates a new fixture, verifies denied Reader/Writer/anonymous requests, deletes it as owner, and checks sharing-grant cascade cleanup. It requires migration 004. The browser suite uses two isolated sessions. `test:signup` checks the registration UI with mocked APIs against a running local dev server and creates no real account/email. `test:registration` checks actual signup plus private create/save/reopen, and creates one disposable account only when signups are enabled and Confirm email is OFF; its generated password is not printed or stored. Use `PRODUCT_URL=http://localhost:5173` for local UI with real Supabase or the live URL for release acceptance. Tests create labeled sample documents and never edit an existing user document. Screenshots/download artifacts are ignored.
 
 ## Scope and handoff
 
