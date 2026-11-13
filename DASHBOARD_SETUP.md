@@ -2,6 +2,8 @@
 
 ## Supabase
 
+For the newly requested owner-only Delete action, run `supabase/migrations/202611130004_owner_delete.sql` once. It grants DELETE only through an owner RLS policy and uses the existing share FK cascade. It does not depend on migration 003.
+
 The library/image fix requires no new migration: cards do not query documents.preview, and images save inside documents.content. The older 003 preview/attachment migration is optional legacy history and is not needed by the current app. Do not rerun the initial schema on this configured project.
 
 1. Open the existing project → SQL Editor → New query. Paste the entire contents of `supabase/migrations/202611130001_documents.sql` and Run **once**. It is a transactional, versioned initial migration.

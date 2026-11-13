@@ -10,6 +10,7 @@ import type { DemoUser, Doc, Metadata, Recipient, ShareRole } from './data'
 import { importText } from './importText'
 import { downloadDocument, importIntoDraft } from './documentFiles'
 import { LIBRARY_COLUMNS, libraryDocument } from './library'
+import { deleteDocument } from './deleteDocument'
 import { DocumentImage } from './DocumentImage'
 import { embeddedImageBytes, inlineImageNode, MAX_DOCUMENT_IMAGE_BYTES, validateImage } from './imageFiles'
 import '@fontsource/instrument-sans/400.css'
@@ -70,6 +71,8 @@ function Library({session}: {session: Session}) {
   const [sharing, setSharing] = useState<Metadata | null>(null)
   const shareTrigger = useRef<HTMLButtonElement | null>(null)
   const [downloading, setDownloading] = useState('')
+  const [deleting,setDeleting] = useState('')
+  const [deleteNotice,setDeleteNotice] = useState('')
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -121,6 +124,17 @@ function Library({session}: {session: Session}) {
     }catch(error){setError('Could not download document. '+message(error))}
     finally{setDownloading('')}
   }
+  async function remove(doc: Metadata) {
+    if(deleting||doc.owner_id!==session.user.id)return
+    if(!window.confirm(`Permanently delete “${doc.title}”? This removes its text, images, and sharing access for everyone. This cannot be undone.`))return
+    setDeleting(doc.id);setError('');setDeleteNotice('')
+    try {
+      const deletedId=await deleteDocument(doc.id,session.user.id)
+      setDocs(current=>current.filter(item=>item.id!==deletedId))
+      setDeleteNotice('Document deleted.')
+    }catch(error){setError('Could not delete document. Nothing was removed from your library. '+message(error))}
+    finally{setDeleting('')}
+  }
   function section(title: string, owned: boolean, index: string) {
     const all=docs.filter(doc=>(doc.owner_id===session.user.id)===owned)
     const items=all.filter(doc=>(doc.title+' '+(doc.preview??'')).toLowerCase().includes(search.toLowerCase()))
@@ -129,12 +143,12 @@ function Library({session}: {session: Session}) {
       {items.length?<div className="document-grid">{items.map((doc,index)=>{
         const editable=owned||roles[doc.id]==='writer'
         return <article className={`document-card card-tone-${index%4}`} key={doc.id} style={{animationDelay:`${Math.min(index,8)*45}ms`}} aria-labelledby={'card-'+doc.id}>
-          <button className="card-preview" aria-label={`Open ${doc.title}`} onClick={()=>navigate('/docs/'+doc.id)}>
+          <button className="card-preview" disabled={deleting===doc.id} aria-label={`Open ${doc.title}`} onClick={()=>navigate('/docs/'+doc.id)}>
             <span className="mini-page"><span className="mini-page-label">AJAIA / DOCUMENT</span><span className="mini-page-title">{doc.title}</span><span className="mini-page-text">{doc.preview||'Open this document to keep writing.'}</span><span className="mini-page-line"/><span className="mini-page-line short"/></span>
             <span className="card-open" aria-hidden="true">↗</span>
           </button>
           <div className="card-details"><p className="card-access">{owned?'OWNER · YOU':`Shared · ${users.find(u=>u.id===doc.owner_id)?.alias||'Document owner'} · ${roles[doc.id]==='writer'?'Writer':'Reader'}`}</p><h3 id={'card-'+doc.id}>{doc.title}</h3><time dateTime={doc.updated_at}>Edited {new Date(doc.updated_at).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}</time></div>
-          <div className="card-actions"><button onClick={()=>navigate('/docs/'+doc.id)}>{editable?'Edit':'Open'}</button>{owned&&<button onClick={event=>{shareTrigger.current=event.currentTarget;setSharing(doc)}}>Share</button>}<button disabled={Boolean(downloading)} onClick={()=>void download(doc)}>{downloading===doc.id?'Downloading…':'Download'}</button></div>
+          <div className="card-actions"><button disabled={deleting===doc.id} onClick={()=>navigate('/docs/'+doc.id)}>{editable?'Edit':'Open'}</button>{owned&&<button disabled={deleting===doc.id} onClick={event=>{shareTrigger.current=event.currentTarget;setSharing(doc)}}>Share</button>}<button disabled={Boolean(downloading)||deleting===doc.id} onClick={()=>void download(doc)}>{downloading===doc.id?'Downloading…':'Download'}</button>{owned&&<button className="delete-action" disabled={Boolean(deleting)} onClick={()=>void remove(doc)}>{deleting===doc.id?'Deleting…':'Delete'}</button>}</div>
         </article>
       })}</div>:<div className="empty"><span className="empty-index">{index}</span><div><h3>{search?'No matching pages.':owned?'Your next idea starts here.':'Good ideas travel.'}</h3><p>{search?'Try another title or a few words from your document.':owned?'Start with a blank page, or bring your notes along.':'Documents shared with you will land here. A little collaboration, a lot of possibility.'}</p></div></div>}
     </section>
@@ -143,7 +157,7 @@ function Library({session}: {session: Session}) {
     <div className="workspace-intro"><span><i className="status-dot"/> YOUR CREATIVE CORNER</span><span>LESS NOISE. MORE IDEAS.</span></div>
     <div className="library-heading"><div><p className="eyebrow">WRITE. KEEP. SHARE.</p><h1>Make room<br/>for <em>what’s next.</em><span className="hero-star" aria-hidden="true">✳</span></h1><p className="muted">Big thoughts. Rough drafts. The good stuff in between.</p></div><div className="library-actions"><div className="buttons"><button disabled={busy} onClick={()=>fileRef.current?.click()}>Import .txt ↗</button><button className="primary" disabled={busy} onClick={()=>void create()}>{busy?'Creating…':'New document +'}</button></div><p className="hint">UTF-8 .txt · up to 100 KiB</p><input ref={fileRef} type="file" accept=".txt,text/plain" aria-label="Import UTF-8 text file" hidden onChange={event=>{const file=event.target.files?.[0];if(file)void create(file)}}/></div></div>
     <div className="library-tools"><span>{docs.length} {docs.length===1?'document':'documents'} / endless possibilities</span><div className="search-box"><label className="sr-only" htmlFor="document-search">Search documents</label><input id="document-search" type="search" placeholder="Find a thought…" value={search} onChange={event=>setSearch(event.target.value)}/><span aria-hidden="true">⌕</span></div></div>
-    <ErrorText text={error}/><ErrorText text={detailsError}/>{(error||detailsError)&&<button onClick={()=>void refresh()}>Reload library</button>}
+    <ErrorText text={error}/><ErrorText text={detailsError}/>{deleteNotice&&<p className="success" role="status">{deleteNotice}</p>}{(error||detailsError)&&<button onClick={()=>void refresh()}>Reload library</button>}
     {loading?<p role="status">Gathering your ideas…</p>:<>{section('My documents',true,'01')}{section('Shared with me',false,'02')}</>}
     <footer><span>AJAIA / A LITTLE SPACE TO THINK</span><span>Made for your next good idea. ↗</span></footer>
   </main>{sharing&&<ShareDialog document={sharing} onClose={()=>{setSharing(null);requestAnimationFrame(()=>shareTrigger.current?.focus())}}/>}</>

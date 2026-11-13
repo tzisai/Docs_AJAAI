@@ -9,10 +9,11 @@ npm ci
 npm test
 ```
 
-Vitest runs all `tests/*.test.ts` files and prints each suite's pass/fail count. At present there are **26 checks in 4 suites**:
+Vitest runs all `tests/*.test.ts` files and prints each suite's pass/fail count. At present there are **29 checks in 5 suites**:
 
 - `importText.test.ts`: the actual multiline walkthrough fixture, Unicode, blank lines, literal markup, line endings, empty/wrong/oversized/invalid UTF-8 files.
 - `documentFiles.test.ts`: importing into an existing unsaved rich-text draft, preserving formatting, protecting edits made during asynchronous decoding, invalid-input nonmutation, readable list export, safe filenames.
+- `deleteDocument.test.ts`: returned-row confirmation, document/owner request scoping, and rejection of zero-row or error responses so failed deletion cannot hide a card.
 - `library.test.ts`: compatibility with existing rows without a preview column, visible image-only/empty documents, and bounded card excerpts.
 - `imageFiles.test.ts`: the real PNG sample, JPEG/WebP signatures, spoofed images, disallowed formats, empty/oversized files, exact inline image bytes and embedded-image size accounting.
 
@@ -31,12 +32,14 @@ These require the migrations, demo aliases, and ordinary disposable Alice/Bob ac
 ```sh
 npm run test:permissions
 npm run test:files
+npm run test:delete
 npx playwright install chromium
 npm run test:browser
 ```
 
 - `integration/check-permissions.mjs`: real document RLS, Reader/Writer transitions, denied grants, protected columns, downgrade enforcement and anonymous denial.
 - `integration/check-files.mjs`: real inline image persistence, metadata projections without the optional preview column/image payloads, Reader/Writer permissions, atomic saves, and maximum-size image save/reopen. No Storage bucket or new migration is required.
+- `integration/check-delete.mjs`: owner-only deletion and sharing cascade after migration 004. It deletes only its own new fixture, never existing documents.
 - `integration/browser-check.mjs`: two isolated real-browser sessions, rich text/save/refresh, sharing roles, offline save recovery, text imports, images inside the page, owner-card visibility, card downloads, and narrow layout checks.
 
 Use `PRODUCT_URL=http://localhost:5173` with `npm run dev` for local UI against real Supabase, or the deployed URL for release acceptance. Integration checks create labeled sample documents, and the image test restores a small sample after checking a 2 MiB payload. They never edit an existing user document. Browser artifacts go to ignored `artifacts/`.

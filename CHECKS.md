@@ -101,3 +101,13 @@
 - GitHub remote still fails HTTPS authentication; agent cannot publish this correction. User must push/deploy the final commit; no SQL dashboard step is necessary.
 - Final extended real-browser rerun PASS at 2026-11-13T21:49:53.511Z, doc 88341248-4ed1-491c-a753-0e17ee134278. Includes saved owner card/reopen with image and a forced directory 503 that cannot hide the document list. All other editor/share/offline/import/download/narrow checks passed; zero page errors.
 - Exact Node 22.22.0 production build and all 26 unit tests PASS for the final correction. This is a local build with real-backend acceptance, not a claim that the deployed stale bundle was updated.
+
+## Final requested feature — Delete on owner cards
+- Added Delete to owned document cards, with an explicit permanent-deletion confirmation naming the document and its text/images/sharing access. Reader/Writer cards omit Delete.
+- DELETE is scoped to document ID and owner ID, requires a returned row, and only then removes the card. Cancel sends no request. Errors/zero-row results preserve the card and show a retryable error. Other card actions are disabled while that document is being deleted.
+- Added migration 202611130004_owner_delete.sql: authenticated DELETE grant plus an owner-only RLS policy. It requires the initial schema, not optional migration 003. Existing FK cascade removes shares; embedded images are deleted with the document JSON row.
+- npm test PASS: 29 tests in 5 suites. Build PASS. New unit coverage checks affected-row confirmation, ownership scope, zero-row denial, and propagated errors.
+- Local PostgreSQL/PGlite tests PASS: Reader/Writer deletion zero rows, anonymous denial, owner deletion succeeds, grants cascade, document is gone. Verified without optional migration 003.
+- First real ordinary-account delete suite confirms Reader/Writer/anonymous denial and unchanged image/text after denied attempts, then stops because owner DELETE is not granted yet. Exact migration 004 handed off; no existing user documents were deleted. Live successful owner deletion remains pending the SQL action.
+- Isolated Chromium delete UI checks PASS: Cancel sends no DELETE; permission error and zero-row denial keep the card; confirmed success removes only the target and survives reload; Reader/Writer cards omit Delete; 390px cards fit with no page errors. These are UI-only mocked-data checks, separate from pending cloud owner deletion.
+- Exact Node 22.22.0 build and all 29 tests PASS for the final Delete version. Reviewer docs and test commands updated; no optional UI work added.

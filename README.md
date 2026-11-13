@@ -4,7 +4,7 @@ A focused document workspace with rich text, images inside the writing page, pre
 
 Product URL: https://docs-ajaai.onrender.com
 
-The latest fix works with the existing database: **no `documents.preview` column or Storage bucket is required**. The earlier migration-dependent card view has been replaced. Apply only the initial document schema and Reader/Writer migration for a new installation. See [CHECKS.md](CHECKS.md) for actual results and release status.
+The latest fix works with the existing database: **no `documents.preview` column or Storage bucket is required**. The earlier migration-dependent card view has been replaced. Apply the initial schema, Reader/Writer migration, and owner-delete migration for a new installation; the legacy preview/Storage migration is not required. See [CHECKS.md](CHECKS.md) for actual results and release status.
 
 ## Run locally
 
@@ -30,7 +30,7 @@ npm run build
 npm run preview
 ```
 
-All **26 unit checks in 4 suites** are in [tests/](tests/README.md). The delayed-import regression test proves that edits made while a file is being decoded survive. Library tests cover missing preview columns and image-only documents. Image tests check validation and exact embedded bytes. Build includes strict TypeScript checking of the app. No lint script is configured.
+All **29 unit checks in 5 suites** are in [tests/](tests/README.md). The delayed-import regression test proves that edits made while a file is being decoded survive. Library tests cover missing preview columns and image-only documents. Image tests check validation and exact embedded bytes. Build includes strict TypeScript checking of the app. No lint script is configured.
 
 ## Database and demo accounts
 
@@ -38,8 +38,9 @@ For a new project, run these SQL files once, in order:
 
 1. `supabase/migrations/202611130001_documents.sql`: documents, demo aliases, sharing, constraints, grants, and RLS.
 2. `supabase/migrations/202611130002_share_roles.sql`: Reader/Writer roles and owner-only role changes.
+3. `supabase/migrations/202611130004_owner_delete.sql`: owner-only deletion and existing FK cascade cleanup. This skips optional migration 003.
 
-**Existing demo project:** these two migrations already work; no new SQL is needed for this fix. `202611130003_previews_attachments.sql` is retained as a legacy optional migration from the earlier attachment implementation. The current app does not use its generated column or bucket. Do not run it to fix saving or images, and do not rerun the initial schema. If already applied, it can remain installed.
+**Existing demo project:** the library/image fix needs no new SQL. For the newly requested Delete button, run only `202611130004_owner_delete.sql` once to grant owner-only deletion. Listing/saving still work before it is applied; a denied deletion leaves the card intact. `202611130003_previews_attachments.sql` is retained as a legacy optional migration from the earlier attachment implementation. The current app does not use its generated column or bucket. Do not run it to fix saving or images, and do not rerun the initial schema. If already applied, it can remain installed.
 
 Create two disposable email/password users in Supabase Authentication → Users with Auto Confirm enabled, disable public signups, and seed only their UUIDs and aliases:
 
@@ -61,7 +62,7 @@ Use Alice in a normal window and Bob in a separate browser profile/private windo
 
 1. Alice signs in, creates a document, renames it, and uses bold, italic, underline, headings, bullets and numbered lists. Save or Ctrl/Cmd+S; wait for Saved.
 2. Select **Insert image into document +** and choose `samples/idea-board.png`. The image appears inside the white writing page. It is an unsaved change until Save. Save, refresh, and confirm the title, text, and image remain.
-3. Return to Library: the saved card must appear in My documents. Open it again. Card actions are Edit, owner-only Share, and Download. Search filters title/text previews.
+3. Return to Library: the saved card must appear in My documents. Open it again. Card actions are Edit, owner-only Share/Delete, and Download. Delete asks for permanent confirmation; Cancel does nothing. A confirmed owner deletion removes the document, embedded images, and sharing grants. Readers/Writers cannot delete it. Search filters title/text previews.
 4. Bob opens the private direct URL, signs in, and is denied. Alice opens Share, selects Bob as Reader, and grants access. Bob refreshes: text/images are visible, editing and sharing controls are absent, and his card appears under Shared with me.
 5. Alice changes Role for Bob to Writer under Who has access. Bob refreshes/reopens, edits/saves, and Alice refreshes to see the result. Only Alice can manage sharing. Downgrade Bob to Reader: database writes are denied immediately; refresh updates his controls.
 6. Import `samples/team-notes.txt` from the library to create a new document. Filename stem becomes title; blank lines and literal markup remain text. In the editor, **Import text into draft** appends to existing work without changing the title. Save the combined draft and refresh. Invalid input must leave existing work intact.
@@ -88,11 +89,12 @@ Put the ordinary demo `ALICE_EMAIL`, `ALICE_PASSWORD`, `BOB_EMAIL`, `BOB_PASSWOR
 ```sh
 npm run test:permissions
 npm run test:files
+npm run test:delete
 npx playwright install chromium
 npm run test:browser
 ```
 
-The permission suite tests real document RLS and role changes (35 checks). The file suite tests real text/image atomic persistence, owner library projections, Reader/Writer access, anonymous denial, and a 2 MiB image save/reopen, without new SQL. The browser suite uses two isolated sessions. Use `PRODUCT_URL=http://localhost:5173` for local UI with real Supabase or the live URL for release acceptance. Tests create labeled sample documents and never edit an existing user document. Screenshots/download artifacts are ignored.
+The permission suite tests real document RLS and role changes (35 checks). The file suite tests real text/image atomic persistence, owner library projections, Reader/Writer access, anonymous denial, and a 2 MiB image save/reopen, without new SQL. The deletion suite creates a new fixture, verifies denied Reader/Writer/anonymous requests, deletes it as owner, and checks sharing-grant cascade cleanup. It requires migration 004. The browser suite uses two isolated sessions. Use `PRODUCT_URL=http://localhost:5173` for local UI with real Supabase or the live URL for release acceptance. Tests create labeled sample documents and never edit an existing user document. Screenshots/download artifacts are ignored.
 
 ## Scope and handoff
 

@@ -2,13 +2,13 @@
 
 Product URL: https://docs-ajaai.onrender.com
 
-**Status: corrected source is verified locally against real Supabase; deployment/video/Drive verification remain pending.** The library no longer depends on `documents.preview`, and images now save inside the document JSON. No new SQL or Storage setup is needed for this fix. All 26 unit checks pass; real file/persistence checks confirm saved cards, Reader/Writer permissions, and a maximum-size 2 MiB image save/reopen. The real two-session local browser flow passes create/format/save/refresh, embedded images, role changes, offline retry, import and download. CHECKS.md records actual outcomes; do not treat the deployed URL as the corrected release until it is redeployed and checked.
+**Status: corrected source is verified locally against real Supabase; deployment/video/Drive verification remain pending.** The library no longer depends on `documents.preview`, and images now save inside the document JSON. The library/image correction needs no new SQL or Storage setup. The final added Delete action needs only owner-delete migration 004. All 29 unit checks pass; real file/persistence checks confirm saved cards, Reader/Writer permissions, and a maximum-size 2 MiB image save/reopen. The real two-session local browser flow passes create/format/save/refresh, embedded images, role changes, offline retry, import and download. CHECKS.md records actual outcomes; do not treat the deployed URL as the corrected release until it is redeployed and checked.
 
 ## Folder contents
 
 The reviewer package contains:
 
-- `ajaia-source.zip`: clean source including `src/`, `package.json`, `package-lock.json`, `tsconfig.json`, `vite.config.ts`, `index.html`, `.env.example`, `.gitignore`, `.node-version`, `render.yaml`, `supabase/migrations/202611130001_documents.sql`, `supabase/migrations/202611130002_share_roles.sql`, `supabase/migrations/202611130003_previews_attachments.sql` (optional legacy history; not used), `supabase/seed-demo.sql`, `scripts/`, `tests/` (unit and real-backend integration checks, plus tests/README.md), `samples/team-notes.txt`, `samples/idea-board.png`, `LICENSE`, and the Markdown/text docs listed below.
+- `ajaia-source.zip`: clean source including `src/`, `package.json`, `package-lock.json`, `tsconfig.json`, `vite.config.ts`, `index.html`, `.env.example`, `.gitignore`, `.node-version`, `render.yaml`, `supabase/migrations/202611130001_documents.sql`, `supabase/migrations/202611130002_share_roles.sql`, `supabase/migrations/202611130003_previews_attachments.sql` (optional legacy history; not used), `supabase/migrations/202611130004_owner_delete.sql`, `supabase/seed-demo.sql`, `scripts/`, `tests/` (unit and real-backend integration checks, plus tests/README.md), `samples/team-notes.txt`, `samples/idea-board.png`, `LICENSE`, and the Markdown/text docs listed below.
 - `README.md`: setup, environment variables, migration/seed instructions, .txt constraints, and two-user reviewer script.
 - `ARCHITECTURE.md`: data flow, database enforcement, deployment, and tradeoffs.
 - `AI_WORKFLOW.md`: actual tools, concrete acceleration, changed AI patch, and verification evidence.
@@ -28,11 +28,12 @@ Alice and Bob both sign in successfully. Their disposable credentials are in `RE
 
 ## Working locally
 
-Implemented: auth restoration and direct-link return; owned/shared document cards; create/rename; rich-text formatting; explicit atomic title/body/image Save with dirty tracking and retry; text import as a new document or appended to an existing draft; images inside the writing page; plain-text Download; Reader/Writer roles with owner-only sharing. The library projects text leaves instead of querying a missing preview column or fetching image payloads. Optional sharing-detail failures cannot hide the document list. All 26 unit checks pass. The ordinary-account role suite passes 35 real checks; file/API checks verify exact embedded image persistence, current permissions, and a 2 MiB payload without new SQL.
+Implemented: auth restoration and direct-link return; owned/shared document cards with owner-only Delete confirmation; create/rename; rich-text formatting; explicit atomic title/body/image Save with dirty tracking and retry; text import as a new document or appended to an existing draft; images inside the writing page; plain-text Download; Reader/Writer roles with owner-only sharing. The library projects text leaves instead of querying a missing preview column or fetching image payloads. Optional sharing-detail failures cannot hide the document list. All 29 unit checks pass. The ordinary-account role suite passes 35 real checks; file/API checks verify exact embedded image persistence, current permissions, and a 2 MiB payload without new SQL.
 
 ## Missing / incomplete
 
 - Push and deploy the corrected source from an authenticated Git terminal. Agent GitHub HTTPS credentials are unavailable. **No new migration is required.**
+- For the added Delete action, apply only `supabase/migrations/202611130004_owner_delete.sql`. Live owner-delete acceptance is pending this permission update; listing/saving do not depend on it.
 - Repeat release acceptance against https://docs-ajaai.onrender.com and record its tested commit. Local UI with real Supabase has passed; that is distinct from verifying the deployed corrected bundle.
 - User records/uploads the 3–5 minute walkthrough; actual unlisted URL belongs in WALKTHROUGH_URL.txt.
 - User uploads the prepared folder to Drive, supplies the folder link, and verifies the folder/video signed out.

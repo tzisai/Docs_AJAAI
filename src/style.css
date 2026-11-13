@@ -6,3 +6,5 @@
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}.document-card:hover,.document-card:focus-within,button:hover{transform:none!important}}
 
 .image-insert{max-width:900px;margin:0 auto 14px}.image-insert>div{display:flex;align-items:center;gap:14px;flex-wrap:wrap}.image-insert button{font-size:11px;min-height:36px;padding:8px 12px}.image-insert .hint{font-size:10px}.image-insert .success{font-size:12px;margin:10px 0}.tiptap img{display:block;max-width:100%;height:auto;margin:20px 0;border-radius:5px}.tiptap img.ProseMirror-selectednode{outline:3px solid var(--accent);outline-offset:4px}@media(max-width:700px){.image-insert>div{gap:8px}.image-insert .hint{font-size:9px}}
+
+.card-actions{flex-wrap:wrap}.card-actions button.delete-action{color:#9f311f;border-color:#e2c6bd;margin-left:0}.card-actions .delete-action:hover:not(:disabled){color:#7f2416;background:#f5e1da;border-color:#c48d7c}.card-actions button:nth-child(3){margin-left:auto}
