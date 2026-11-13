@@ -4,7 +4,7 @@ A small document workspace: write and save rich text, import plain text, and giv
 
 Product URL: https://docs-ajaai.onrender.com
 
-**Release status:** local build/import tests pass. Live deployment, database migration, and real Alice/Bob flow are not yet verified. See [CHECKS.md](CHECKS.md) for actual outcomes and [DASHBOARD_SETUP.md](DASHBOARD_SETUP.md) for pending dashboard actions. Do not treat the URL above as a verified release until those checks pass.
+**Release status:** local build/import tests pass. The owner flow and pre-share denial pass against real Supabase from local browsers. The deployed flow and complete sharing flow remain unverified. See [CHECKS.md](CHECKS.md) for actual outcomes and [DASHBOARD_SETUP.md](DASHBOARD_SETUP.md) for pending dashboard actions. Do not treat the URL above as a verified release until those checks pass.
 
 ## Run locally
 
@@ -44,9 +44,9 @@ insert into public.demo_users (id, alias) values
   ('BOB_AUTH_USER_UUID', 'Bob');
 ```
 
-Replace those placeholders with actual Auth UUIDs. Users cannot modify this directory. It does not expose Auth emails or the Auth users table. See [DASHBOARD_SETUP.md](DASHBOARD_SETUP.md) for dashboard details.
+Replace those placeholders with actual Auth UUIDs. For this configured demo project, `supabase/seed-demo.sql` contains the IDs verified through ordinary Alice/Bob sign-in; run that file instead of copying placeholders. Users cannot modify this directory. It does not expose Auth emails or the Auth users table. See [DASHBOARD_SETUP.md](DASHBOARD_SETUP.md) for dashboard details.
 
-Disposable reviewer accounts: **pending provisioning/confirmation**. Provide the actual emails and passwords privately in the submission folder's reviewer guide before submitting. Use sample content only. Do not reuse real passwords; rotate or remove the demo accounts after review.
+Both disposable Alice/Bob accounts have successfully signed in. `REVIEWER_ACCOUNTS.md` next to the source ZIP contains their login details after packaging; credentials stay outside git and the source ZIP. The demo directory must be seeded before sharing can work. Use sample content only. Do not reuse real passwords; rotate or remove the demo accounts after review.
 
 ## Render
 
@@ -74,7 +74,7 @@ Only **UTF-8 `.txt` files up to 100 KiB (102,400 bytes)** are accepted. Empty/wh
 
 ## Permission and browser checks
 
-After configuring demo accounts, put `ALICE_EMAIL`, `ALICE_PASSWORD`, `BOB_EMAIL`, `BOB_PASSWORD`, and `PRODUCT_URL` in ignored `.env.review.local`. The scripts also read `.env.local`. These must be ordinary demo credentials.
+After configuring demo accounts, put `ALICE_EMAIL`, `ALICE_PASSWORD`, `BOB_EMAIL`, `BOB_PASSWORD`, and `PRODUCT_URL` in ignored `.env.review.local`. The scripts also read `.env.local`; the supplied `users.env.review.local` filename is supported too. These must be ordinary demo credentials.
 
 ```sh
 node scripts/check-permissions.mjs

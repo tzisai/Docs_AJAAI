@@ -48,3 +48,13 @@
 - Extended isolated UI checks: PASS canceled browser Back preserves URL/draft; dialog Tab/Shift+Tab cycles inside modal. Added a small explicit boundary loop after observing native dialog Tab could move focus to browser chrome at its last control.
 - No further optional visual work planned. Required live flow remains blocked on Render VITE env/rewrite and ordinary demo credentials, not on local build.
 - Latest local app source will be checkpointed with documentation and scripts. No deployed release commit has been verified yet.
+
+## Real-backend verification started
+- Ordinary Alice and Bob credentials supplied in ignored users.env.review.local. Both sign in successfully. Loader supports this filename and the original .env.review.local; both are ignored.
+- Real API PASS: Alice creates a document with owner_id derived from session; Bob private SELECT returns zero rows; anonymous read denied; Bob private UPDATE denied/zero rows; Bob grants using Alice owner ID denied; forged ownership grant denied.
+- First sharing attempt BLOCKED by recipient FK because public.demo_users is empty. Generated supabase/seed-demo.sql from verified ordinary account IDs; handed off exact SQL file to run. No privileged key used.
+- Real backend via local browser PASS: Alice creates/renames, applies heading/bold/italic/underline, saves using keyboard, refreshes direct URL and sees title/formatting; Bob follows same URL through sign-in and is denied before share.
+- Live Render browser still shows missing VITE config; direct editor HTTP probe still 404. Local real-backend results do not count as deployed acceptance.
+- Extended the real-backend local owner browser check to save/reload both bulleted and numbered lists as well as heading/marks: PASS. Full browser script still stops at the absent Bob picker option until the seed SQL is run.
+- Supplied review credentials remain outside source ZIP/git. Packaging now generates REVIEWER_ACCOUNTS.md alongside the ZIP and readable docs, without printing passwords.
+- scripts/check-permissions.mjs now checks seeded directory membership before creating a test doc, and checks public signup disabling before declaring full success. Its session cleanup uses local sign-out to avoid revoking unrelated reviewer sessions.

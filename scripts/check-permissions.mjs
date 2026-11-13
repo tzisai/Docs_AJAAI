@@ -2,7 +2,7 @@
 import { createClient } from '@supabase/supabase-js'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-for (const path of ['.env.local', '.env.review.local']) {
+for (const path of ['.env.local', '.env.review.local', 'users.env.review.local']) {
   try { for (const line of readFileSync(path,'utf8').split('\n')) {
     const match=line.match(/^([A-Z_]+)=(.*)$/); if(match && !process.env[match[1]]) process.env[match[1]]=match[2].trim().replace(/^['"]|['"]$/g,'')
   }} catch { /* optional local files */ }
@@ -16,6 +16,7 @@ function pass(name){checks.push(name);console.log('PASS',name)}
 const {data:a,error:ae}=await alice.auth.signInWithPassword({email:process.env.ALICE_EMAIL,password:process.env.ALICE_PASSWORD});assert.ifError(ae)
 const {data:b,error:be}=await bob.auth.signInWithPassword({email:process.env.BOB_EMAIL,password:process.env.BOB_PASSWORD});assert.ifError(be)
 assert.notEqual(a.user.id,b.user.id)
+const directory=await alice.from('demo_users').select('id,alias');assert.ifError(directory.error);assert.ok(directory.data.some(u=>u.id===a.user.id)&&directory.data.some(u=>u.id===b.user.id),'Demo directory is missing Alice or Bob. Run supabase/seed-demo.sql in SQL Editor before checking sharing.')
 const content={type:'doc',content:[{type:'paragraph',content:[{type:'text',text:'Owner data must remain unchanged.'}]}]}
 const title='Permission check '+new Date().toISOString()
 const {data:doc,error:ce}=await alice.from('documents').insert({title,content}).select().single();assert.ifError(ce);assert.equal(doc.owner_id,a.user.id);pass('Alice creates document; owner derived from session')
@@ -41,5 +42,6 @@ grant=await alice.from('document_shares').insert({document_id:doc.id,owner_id:a.
 result=await read(alice);assert.ifError(result.error);assert.equal(result.data[0].title,title);assert.deepEqual(result.data[0].content,content);pass('Owner data unchanged after denied actions')
 const saved=await alice.from('documents').update({title:title+' saved',content}).eq('id',doc.id).select('id,updated_at').single();assert.ifError(saved.error);assert.equal(saved.data.id,doc.id);assert.ok(new Date(saved.data.updated_at)>=new Date(doc.updated_at));pass('Owner can save; database sets updated_at')
 result=await read(anonymous);assert.ok(result.error || result.data?.length===0);pass('Anonymous still cannot read after share')
+const settings=await fetch(process.env.VITE_SUPABASE_URL+'/auth/v1/settings',{headers:{apikey:process.env.VITE_SUPABASE_PUBLISHABLE_KEY}}).then(r=>r.json());assert.equal(settings.disable_signup,true,'Disable public signups in Supabase Authentication settings.');pass('Public signups disabled')
 console.log(JSON.stringify({testedAt:new Date().toISOString(),documentId:doc.id,checks:checks.length,scope:'Real Supabase API with ordinary Alice/Bob sessions; not browser UX checks'},null,2))
-await Promise.all([alice.auth.signOut(),bob.auth.signOut()])
+await Promise.all([alice.auth.signOut({scope:'local'}),bob.auth.signOut({scope:'local'})])

@@ -17,7 +17,7 @@ const pending=docs.filter(p=>/MISSING|verification pending|verification incomple
 if(pending.length)console.log('REVIEW REQUIRED: explicit pending items remain in '+pending.join(', '))
 
 const reviewEnv = {}
-try { for (const line of readFileSync('.env.review.local','utf8').split('\n')) { const m=line.match(/^([A-Z_]+)=(.*)$/); if(m) reviewEnv[m[1]]=m[2].trim().replace(/^['"]|['"]$/g,'') } } catch {}
+for (const path of ['.env.review.local','users.env.review.local']) { try { for (const line of readFileSync(path,'utf8').split('\n')) { const m=line.match(/^([A-Z_]+)=(.*)$/); if(m && m[2].trim()) reviewEnv[m[1]]=m[2].trim().replace(/^['"]|['"]$/g,'') } } catch {} }
 const accountKeys=['ALICE_EMAIL','ALICE_PASSWORD','BOB_EMAIL','BOB_PASSWORD']
 const accountText=accountKeys.every(key=>reviewEnv[key])
   ? `# Disposable reviewer accounts\n\nUse sample content only. These accounts are for this demo; do not reuse these passwords.\n\nAlice (owner): ${reviewEnv.ALICE_EMAIL}\nPassword: ${reviewEnv.ALICE_PASSWORD}\n\nBob (reader): ${reviewEnv.BOB_EMAIL}\nPassword: ${reviewEnv.BOB_PASSWORD}\n\nOpen Alice and Bob in separate browser profiles/private windows. Start at ${reviewEnv.PRODUCT_URL || 'https://docs-ajaai.onrender.com'}. Follow README.md. The source ZIP excludes this credentials file. Rotate or delete demo accounts after review.\n`

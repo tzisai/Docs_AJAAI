@@ -1,7 +1,7 @@
 // Real backend browser acceptance flow. No mocked API and no admin credentials.
 import { chromium, expect } from '@playwright/test'
 import { readFileSync, mkdirSync } from 'node:fs'
-for(const path of ['.env.local','.env.review.local']) {
+for(const path of ['.env.local','.env.review.local','users.env.review.local']) {
   try {for(const line of readFileSync(path,'utf8').split('\n')){const m=line.match(/^([A-Z_]+)=(.*)$/);if(m&&!process.env[m[1]])process.env[m[1]]=m[2].trim().replace(/^['"]|['"]$/g,'')}}catch{}
 }
 for(const key of ['ALICE_EMAIL','ALICE_PASSWORD','BOB_EMAIL','BOB_PASSWORD'])if(!process.env[key])throw new Error('Missing '+key+'; see DASHBOARD_SETUP.md')
@@ -21,9 +21,10 @@ try {
  await body.press('ControlOrMeta+a');await a.getByRole('button',{name:'Bold',exact:true}).click();await expect(a.getByRole('button',{name:'Bold',exact:true})).toHaveAttribute('aria-pressed','true')
  await a.getByRole('button',{name:'Italic',exact:true}).click();await a.getByRole('button',{name:'Underline',exact:true}).click()
  await a.getByLabel('Paragraph style',{exact:true}).selectOption('2')
+ await body.press('ControlOrMeta+End');await body.press('Enter');await a.getByRole('button',{name:'• Bullet list',exact:true}).click();await body.pressSequentially('First bullet');await body.press('Enter');await body.press('Enter');await a.getByRole('button',{name:'1. Numbered list',exact:true}).click();await body.pressSequentially('First numbered item')
  await a.keyboard.press('ControlOrMeta+s');await expect(a.getByRole('status')).toHaveText('Saved')
  await a.reload();await expect(a.getByLabel('Document title',{exact:true})).toHaveValue(title);await expect(a.locator('.tiptap h2 strong em u, .tiptap h2 u em strong, .tiptap h2 strong u em, .tiptap h2 em strong u')).toBeVisible()
- console.log('PASS Alice create, rename, formatting, keyboard save, direct URL refresh')
+ await expect(a.locator('.tiptap ul li')).toContainText('First bullet');await expect(a.locator('.tiptap ol li')).toContainText('First numbered item');console.log('PASS Alice create, rename, heading/marks/both lists, keyboard save, direct URL refresh')
  await b.goto(docURL);await expect(b).toHaveURL(/login\?next=/);await login(b,'BOB');await expect(b.getByRole('alert')).toContainText('unavailable')
  console.log('PASS Bob direct URL before share denied; destination restored across sign-in')
  await a.getByRole('button',{name:'Share',exact:true}).click();await expect(a.getByRole('dialog')).toBeVisible()
