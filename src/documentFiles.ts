@@ -13,6 +13,7 @@ export async function importIntoDraft(file: Pick<File, 'name' | 'size' | 'arrayB
 }
 
 export function documentToText(node: JSONContent): string {
+  if (node.type === 'image') return `[Image: ${node.attrs?.alt || 'image'}]`
   if (node.type === 'text') return node.text ?? ''
   if (node.type === 'hardBreak') return '\n'
   if (node.type === 'bulletList' || node.type === 'orderedList') {

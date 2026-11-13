@@ -42,6 +42,9 @@ describe('Plain text download',()=>{
     ]}
     expect(documentToText(doc)).toBe('Plan — Ajaia\n\n• <b>Literal</b>\n3. Next')
   })
+  it('exports a readable image label instead of leaking a base64 payload',()=>{
+    expect(documentToText({type:'doc',content:[{type:'image',attrs:{src:'data:image/png;base64,YWJj',alt:'Sketch.png'}}]})).toBe('[Image: Sketch.png]')
+  })
   it('makes a safe filename while preserving a meaningful title',()=>{
     expect(downloadFilename('Team / ideas: next?')).toBe('Team _ ideas_ next_.txt')
     expect(downloadFilename('  ')).toBe('document.txt')

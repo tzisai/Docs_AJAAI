@@ -1,5 +1,7 @@
 # AI workflow
 
+This note records the actual sequence. The latest correction below supersedes the earlier preview-column/Storage-gallery implementation.
+
 ## Tools actually used
 
 OpenAI Codex in the repository was used to inspect the assignment and implementation plan, write React/TypeScript/CSS and SQL, run commands, and prepare review materials. Its web tool checked the Tiptap StarterKit and Supabase RLS primary documentation and the Edison Fang design reference. Its plugin discovery located Supabase and Render integrations; discovery alone did not establish account access. No subagents, image generator, or optional UI kit were used.
@@ -33,3 +35,11 @@ Codex inspected the requested David Estrada reference in Chromium, then adapted 
 A regression test deliberately delayed text file decoding, changed the draft during the delay, and verified that the newer text survives the append. That tests the failure mode of taking an early AI-generated draft snapshot. Browser QA found an accessible-name issue in the search label; it was replaced with an explicit external label. The UI fixture also verified that oversized image input never triggers an upload request.
 
 All 21 unit checks passed, and the real ordinary-account role suite passed 35 checks. Local SQL and mocked browser checks validate the new file/card implementation separately from cloud Storage acceptance; migration 003 must be applied before that final check can run. Tests and reviewer commands are now in tests/ and tests/README.md.
+
+## Correction after the user reported missing documents
+
+The first card patch introduced a dependency on an unapplied generated preview column, and image uploads were interpreted as a separate attachment gallery. The user reported the resulting missing-column error and clarified that images must be inside the document. Both decisions were changed: card listing now projects existing JSON text leaves without the extra column, and supported image bytes become Tiptap image nodes saved atomically with the body. The storage/migration dependency was removed from the runtime.
+
+Verification used actual ordinary Supabase sessions, not only generated tests: create/save/reopen worked; the new metadata query returned existing rows; image bytes and surrounding text survived reopen; Reader writes were denied; Writer title/text/image saves appeared to the owner; and a full 2 MiB payload saved/reopened successfully. The browser exercised actual image rendering after refresh, owner-card visibility, direct-link sharing, role transitions, offline recovery, imports, downloads, and narrow layouts. All 26 unit checks pass, including missing-column compatibility and embedded-byte regressions.
+
+A further injected directory outage exposed that waiting for optional sharing requests delayed the entire library. Those requests were separated from core metadata loading, with stale-response guards, so directory failures cannot hold saved documents offscreen. The release must still be pushed/deployed before claiming the live app is fixed.

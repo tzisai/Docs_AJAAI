@@ -9,7 +9,9 @@ import { blankContent, configured, createDocument, message, supabase } from './d
 import type { DemoUser, Doc, Metadata, Recipient, ShareRole } from './data'
 import { importText } from './importText'
 import { downloadDocument, importIntoDraft } from './documentFiles'
-import { Attachments } from './Attachments'
+import { LIBRARY_COLUMNS, libraryDocument } from './library'
+import { DocumentImage } from './DocumentImage'
+import { embeddedImageBytes, inlineImageNode, MAX_DOCUMENT_IMAGE_BYTES, validateImage } from './imageFiles'
 import '@fontsource/instrument-sans/400.css'
 import '@fontsource/instrument-sans/500.css'
 import '@fontsource/instrument-sans/600.css'
@@ -73,18 +75,35 @@ function Library({session}: {session: Session}) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  const [detailsError,setDetailsError] = useState('')
+  const refreshVersion = useRef(0)
   const refresh = useCallback(async()=> {
-    setLoading(true); setError('')
-    const [documents, directory, shares] = await Promise.all([
-      supabase.from('documents').select('id,owner_id,title,updated_at,preview').order('updated_at',{ascending:false}),
-      supabase.from('demo_users').select('id,alias'),
-      supabase.from('document_shares').select('document_id,role').eq('recipient_id',session.user.id),
-    ])
-    if(documents.error || directory.error || shares.error) setError(message(documents.error || directory.error || shares.error))
-    else {setDocs(documents.data); setUsers(directory.data); setRoles(Object.fromEntries(shares.data.map(s=>[s.document_id,s.role])))}
-    setLoading(false)
+    const version=++refreshVersion.current
+    const active=()=>version===refreshVersion.current
+    setLoading(true);setError('');setDetailsError('')
+    // Optional sharing lookups run independently: even a slow/retrying outage
+    // must not hold the core document list in a loading state.
+    void (async()=>{
+      const directory=await supabase.from('demo_users').select('id,alias')
+      if(!active())return
+      if(directory.error)setDetailsError('Some sharing details could not load. Your documents are still available.')
+      else setUsers(directory.data)
+    })().catch(()=>{if(active())setDetailsError('Some sharing details could not load. Your documents are still available.')})
+    void (async()=>{
+      const shares=await supabase.from('document_shares').select('document_id,role').eq('recipient_id',session.user.id)
+      if(!active())return
+      if(shares.error)setDetailsError('Some sharing details could not load. Your documents are still available.')
+      else setRoles(Object.fromEntries(shares.data.map(share=>[share.document_id,share.role])))
+    })().catch(()=>{if(active())setDetailsError('Some sharing details could not load. Your documents are still available.')})
+    try {
+      const documents=await supabase.from('documents').select(LIBRARY_COLUMNS).order('updated_at',{ascending:false})
+      if(!active())return
+      if(documents.error)setError('Could not load documents. '+message(documents.error))
+      else setDocs(documents.data.map(libraryDocument))
+    }catch(error){if(active())setError('Could not load documents. '+message(error))}
+    finally{if(active())setLoading(false)}
   }, [session.user.id])
-  useEffect(()=>{void refresh()},[refresh])
+  useEffect(()=>{void refresh();return()=>{refreshVersion.current++}},[refresh])
   async function create(file?: File) {
     if(busy) return
     setBusy(true); setError('')
@@ -111,7 +130,7 @@ function Library({session}: {session: Session}) {
         const editable=owned||roles[doc.id]==='writer'
         return <article className={`document-card card-tone-${index%4}`} key={doc.id} style={{animationDelay:`${Math.min(index,8)*45}ms`}} aria-labelledby={'card-'+doc.id}>
           <button className="card-preview" aria-label={`Open ${doc.title}`} onClick={()=>navigate('/docs/'+doc.id)}>
-            <span className="mini-page"><span className="mini-page-label">AJAIA / DOCUMENT</span><span className="mini-page-title">{doc.title}</span><span className="mini-page-text">{doc.preview||'An unwritten page. Make it yours.'}</span><span className="mini-page-line"/><span className="mini-page-line short"/></span>
+            <span className="mini-page"><span className="mini-page-label">AJAIA / DOCUMENT</span><span className="mini-page-title">{doc.title}</span><span className="mini-page-text">{doc.preview||'Open this document to keep writing.'}</span><span className="mini-page-line"/><span className="mini-page-line short"/></span>
             <span className="card-open" aria-hidden="true">↗</span>
           </button>
           <div className="card-details"><p className="card-access">{owned?'OWNER · YOU':`Shared · ${users.find(u=>u.id===doc.owner_id)?.alias||'Document owner'} · ${roles[doc.id]==='writer'?'Writer':'Reader'}`}</p><h3 id={'card-'+doc.id}>{doc.title}</h3><time dateTime={doc.updated_at}>Edited {new Date(doc.updated_at).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}</time></div>
@@ -124,7 +143,7 @@ function Library({session}: {session: Session}) {
     <div className="workspace-intro"><span><i className="status-dot"/> YOUR CREATIVE CORNER</span><span>LESS NOISE. MORE IDEAS.</span></div>
     <div className="library-heading"><div><p className="eyebrow">WRITE. KEEP. SHARE.</p><h1>Make room<br/>for <em>what’s next.</em><span className="hero-star" aria-hidden="true">✳</span></h1><p className="muted">Big thoughts. Rough drafts. The good stuff in between.</p></div><div className="library-actions"><div className="buttons"><button disabled={busy} onClick={()=>fileRef.current?.click()}>Import .txt ↗</button><button className="primary" disabled={busy} onClick={()=>void create()}>{busy?'Creating…':'New document +'}</button></div><p className="hint">UTF-8 .txt · up to 100 KiB</p><input ref={fileRef} type="file" accept=".txt,text/plain" aria-label="Import UTF-8 text file" hidden onChange={event=>{const file=event.target.files?.[0];if(file)void create(file)}}/></div></div>
     <div className="library-tools"><span>{docs.length} {docs.length===1?'document':'documents'} / endless possibilities</span><div className="search-box"><label className="sr-only" htmlFor="document-search">Search documents</label><input id="document-search" type="search" placeholder="Find a thought…" value={search} onChange={event=>setSearch(event.target.value)}/><span aria-hidden="true">⌕</span></div></div>
-    <ErrorText text={error}/>{error&&<button onClick={()=>void refresh()}>Reload library</button>}
+    <ErrorText text={error}/><ErrorText text={detailsError}/>{(error||detailsError)&&<button onClick={()=>void refresh()}>Reload library</button>}
     {loading?<p role="status">Gathering your ideas…</p>:<>{section('My documents',true,'01')}{section('Shared with me',false,'02')}</>}
     <footer><span>AJAIA / A LITTLE SPACE TO THINK</span><span>Made for your next good idea. ↗</span></footer>
   </main>{sharing&&<ShareDialog document={sharing} onClose={()=>{setSharing(null);requestAnimationFrame(()=>shareTrigger.current?.focus())}}/>}</>
@@ -176,11 +195,15 @@ function DocumentEditor({doc, session, role}: {doc: Doc; session: Session; role:
   const [importError, setImportError] = useState('')
   const [importNotice, setImportNotice] = useState('')
   const importInput = useRef<HTMLInputElement>(null)
+  const imageInput = useRef<HTMLInputElement>(null)
+  const [insertingImage,setInsertingImage] = useState(false)
+  const [imageError,setImageError] = useState('')
+  const [imageNotice,setImageNotice] = useState('')
   const inFlight = useRef(false)
   const shareButton = useRef<HTMLButtonElement>(null)
   const dirty = canEdit && JSON.stringify({title,content:body}) !== baseline
   const dirtyRef = useRef(dirty); dirtyRef.current = dirty
-  const editor = useEditor({extensions:[StarterKit.configure({heading:{levels:[1,2,3]},link:false})],content:doc.content || blankContent,editable:canEdit,onUpdate:({editor})=>setBody(editor.getJSON()),editorProps:{attributes:{'aria-label':canEdit?'Document body':'Read-only document body',role:'textbox','aria-multiline':'true','aria-readonly':String(!canEdit)}}})
+  const editor = useEditor({extensions:[StarterKit.configure({heading:{levels:[1,2,3]},link:false}),DocumentImage],content:doc.content || blankContent,editable:canEdit,onUpdate:({editor})=>setBody(editor.getJSON()),editorProps:{attributes:{'aria-label':canEdit?'Document body':'Read-only document body',role:'textbox','aria-multiline':'true','aria-readonly':String(!canEdit)}}})
   const save = useCallback(async()=> {
     if(!canEdit || !editor || inFlight.current || !dirty) return
     const cleanTitle=title.trim()
@@ -222,6 +245,23 @@ function DocumentEditor({doc, session, role}: {doc: Doc; session: Session; role:
     }catch(error){setImportError(message(error))}
     finally{setImporting(false);if(importInput.current)importInput.current.value=''}
   }
+  async function insertImage(file: File) {
+    if(!canEdit||!editor||insertingImage)return
+    setInsertingImage(true);setImageError('');setImageNotice('')
+    try {
+      await validateImage(file)
+      const bitmap=await createImageBitmap(file)
+      const tooLarge=bitmap.width>4096||bitmap.height>4096
+      bitmap.close()
+      if(tooLarge)throw new Error('Use an image at most 4096 × 4096 pixels.')
+      const node=await inlineImageNode(file)
+      if(editor.isDestroyed)return
+      if(embeddedImageBytes(editor.getJSON())+file.size>MAX_DOCUMENT_IMAGE_BYTES)throw new Error('This document has reached the 6 MiB image limit. Remove an image before inserting another.')
+      editor.chain().focus().insertContent(node).run()
+      setImageNotice('Image inserted into the page. Save to keep it with your document. Select an image and press Delete to remove it.')
+    }catch(error){setImageError('Could not insert image. '+message(error))}
+    finally{setInsertingImage(false);if(imageInput.current)imageInput.current.value=''}
+  }
   const canLeave=()=>!dirty || window.confirm('Discard unsaved changes?')
   return <><Header session={session} beforeLeave={canLeave}/>
     <main className="editor-workspace">
@@ -240,9 +280,10 @@ function DocumentEditor({doc, session, role}: {doc: Doc; session: Session; role:
       </div>
       <ErrorText text={error}/>
       {canEdit&&<div className="draft-import"><div><button disabled={importing} onClick={()=>importInput.current?.click()}>{importing?'Reading text…':'Import text into draft ↗'}</button><span className="hint">UTF-8 .txt · up to 100 KiB · appends without replacing your work</span></div><input ref={importInput} type="file" accept=".txt,text/plain" aria-label="Import text into current draft" hidden onChange={event=>{const file=event.target.files?.[0];if(file)void appendText(file)}}/><ErrorText text={importError}/>{importNotice&&<p className="success">{importNotice}</p>}</div>}
+      {canEdit&&<div className="image-insert"><div><button disabled={insertingImage} onClick={()=>imageInput.current?.click()}>{insertingImage?'Reading image…':'Insert image into document +'}</button><span className="hint">PNG, JPEG, WebP · up to 2 MiB each · 6 MiB images per document</span></div><input ref={imageInput} type="file" accept="image/png,image/jpeg,image/webp" aria-label="Insert image file" hidden onChange={event=>{const file=event.target.files?.[0];if(file)void insertImage(file)}}/><ErrorText text={imageError}/>{imageNotice&&<p className="success">{imageNotice}</p>}</div>}
       {canEdit && editor && <Toolbar editor={editor}/>}
       <div className="writing-page"><EditorContent editor={editor}/></div>
-      <Attachments documentId={doc.id} canEdit={canEdit}/>
+
     </main>
     {share && <ShareDialog document={doc} onClose={()=>{setShare(false); requestAnimationFrame(()=>shareButton.current?.focus())}}/>}
   </>

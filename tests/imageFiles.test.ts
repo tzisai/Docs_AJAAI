@@ -1,9 +1,9 @@
 import {describe,it,expect} from 'vitest'
 import {readFileSync} from 'node:fs'
-import {attachmentName,attachmentPath,MAX_IMAGE_BYTES,validateImage} from '../src/imageFiles'
+import {embeddedImageBytes,inlineImageNode,MAX_IMAGE_BYTES,validateImage} from '../src/imageFiles'
 const png=Uint8Array.from([137,80,78,71,13,10,26,10])
 function file(name:string,type:string,bytes:Uint8Array,size=bytes.length){return{name,type,size,arrayBuffer:async()=>bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength) as ArrayBuffer}}
-describe('Demo image attachment validation',()=>{
+describe('Inline image validation',()=>{
   it('accepts the actual PNG walkthrough fixture',async()=>{
     const bytes=readFileSync(new URL('../samples/idea-board.png',import.meta.url))
     await expect(validateImage(file('idea-board.png','image/png',bytes))).resolves.toEqual({mime:'image/png',extension:'png'})
@@ -21,10 +21,16 @@ describe('Demo image attachment validation',()=>{
   ])('rejects %s before storage upload',async(name,type,bytes,size,error)=>{
     await expect(validateImage(file(name,type,bytes,size))).rejects.toThrow(error)
   })
-  it('uses a document prefix and random name, removing path characters',()=>{
-    const id='11111111-1111-4111-8111-111111111111'
-    const path=attachmentPath('doc-id','../../My photo.png',id)
-    expect(path).toBe('doc-id/'+id+'--.._.._My photo.png')
-    expect(attachmentName(path)).toBe('.._.._My photo.png')
+  it('embeds exact image bytes inside a Tiptap image node, not a bucket URL',async()=>{
+    const bytes=readFileSync(new URL('../samples/idea-board.png',import.meta.url))
+    const node=await inlineImageNode(file('idea-board.png','image/png',bytes))
+    expect(node.type).toBe('image')
+    expect(node.attrs.alt).toBe('idea-board.png')
+    expect(node.attrs.src).toBe('data:image/png;base64,'+bytes.toString('base64'))
+    expect(embeddedImageBytes({type:'doc',content:[node]})).toBe(bytes.length)
+  })
+  it('counts embedded images nested in a draft without counting remote URLs or text',()=>{
+    const doc={type:'doc',content:[{type:'image',attrs:{src:'data:image/png;base64,YWJjZA=='}},{type:'paragraph',content:[{type:'image',attrs:{src:'data:image/png;base64,YWI='}}]},{type:'image',attrs:{src:'https://example.test/image.png'}}]}
+    expect(embeddedImageBytes(doc)).toBe(6)
   })
 })

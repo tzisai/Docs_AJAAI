@@ -1,5 +1,4 @@
 export const MAX_IMAGE_BYTES = 2 * 1024 * 1024
-export const IMAGE_BUCKET = 'document-images'
 const formats = {
   png: { mime: 'image/png', extension: 'png' },
   jpg: { mime: 'image/jpeg', extension: 'jpg' },
@@ -23,8 +22,17 @@ export async function validateImage(file: Pick<File, 'name' | 'size' | 'type' | 
   return format
 }
 
-export function attachmentPath(documentId: string, filename: string, uniqueId = crypto.randomUUID()) {
-  const safe = filename.replace(/[^a-zA-Z0-9._ -]/g, '_').slice(-120) || 'image'
-  return `${documentId}/${uniqueId}--${safe}`
+export const MAX_DOCUMENT_IMAGE_BYTES = 6 * 1024 * 1024
+export function embeddedImageBytes(node: import('@tiptap/react').JSONContent): number {
+  const src=node.type==='image'&&typeof node.attrs?.src==='string' ? node.attrs.src : ''
+  const payload=src.startsWith('data:image/') ? src.split(',')[1]??'' : ''
+  const own=payload ? Math.max(0,Math.floor(payload.length*3/4)-(payload.endsWith('==')?2:payload.endsWith('=')?1:0)) : 0
+  return own+(node.content??[]).reduce((sum,child)=>sum+embeddedImageBytes(child),0)
 }
-export function attachmentName(path: string) { return path.split('/').at(-1)?.replace(/^[a-f0-9-]{36}--/, '') || 'Image' }
+export async function inlineImageNode(file: Pick<File,'name'|'size'|'type'|'arrayBuffer'>) {
+  const format=await validateImage(file)
+  const bytes=new Uint8Array(await file.arrayBuffer())
+  let binary=''
+  for(let offset=0;offset<bytes.length;offset+=32768)binary+=String.fromCharCode(...bytes.subarray(offset,offset+32768))
+  return { type:'image', attrs:{src:`data:${format.mime};base64,${btoa(binary)}`,alt:file.name,title:file.name} }
+}
