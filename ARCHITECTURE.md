@@ -1,12 +1,12 @@
 # Architecture
 
-The product is three surfaces: login, document library, and document editor with a native modal Share dialog. React, TypeScript, and Vite run as a static SPA on Render. Tiptap 3 with StarterKit supplies document structure and required formatting, including underline. Instrument Sans is bundled locally; the writing body uses Georgia. The visual reference is [Edison Fang Workshop](https://edisonfangworkshop.com/): alignment, small metadata labels, restrained typography, and whitespace. Text labels keep controls understandable and avoid icon licensing/setup work.
+The product is three surfaces: login, document library, and document editor with a native modal Share dialog. React, TypeScript, and Vite run as a static SPA on Render. Tiptap 3 with StarterKit supplies document structure and required formatting, including underline. Instrument Sans is bundled locally; the writing body uses Georgia. The first visual reference was Edison Fang Workshop. A later requested refresh uses [David Estrada’s approach section](https://david-estrada.dev/#approach): dark/light contrast, large editorial headings, a warm orange accent, interactive preview cards, and short transitions. Reduced-motion settings disable animation; the writing page remains white and readable. Text labels keep controls understandable and avoid icon licensing/setup work.
 
 ## Data flow
 
 The browser initializes Supabase Auth before choosing a route. Email/password sessions use the publishable key; Supabase adds the user's session to data requests. Signed-out deep links become `/login?next=/docs/:id` and return after sign-in. There is no privileged server or secret key in the frontend.
 
-The library selects only `id, owner_id, title, updated_at`, never every body. Opening one document retrieves its JSON. Creation and import share `createDocument`. Import validates bytes, decodes UTF-8 strictly, converts lines to paragraph/text JSON, and discards the binary. It never inserts imported markup as HTML.
+The library selects only `id, owner_id, title, updated_at, preview`, never every body. The third migration adds a generated 240-character plain-text preview using an immutable recursive SQL function; previews update with content and cannot be independently forged. Card Download fetches just one document after permission checks, serializes readable plain text, and creates a local download Blob. Opening one document retrieves its JSON. Creation and import share `createDocument`. Import validates bytes, decodes UTF-8 strictly, converts lines to paragraph/text JSON, and discards the binary. It never inserts imported markup as HTML.
 
 The editor keeps title/body in memory and compares them with a last-saved snapshot. Save captures both in one database update, locks requests with a ref, and changes the saved baseline only after a returned row confirms success. A newer edit during the request differs from that snapshot and remains dirty. A missing returned row is an explicit failure. A 15-second timeout and readable retry error preserve drafts on failure. Title normalization does not overwrite a newer title edit.
 
@@ -14,7 +14,7 @@ React Router's blocker handles internal and browser-history navigation. Sign-out
 
 ## Database authorization
 
-Two versioned transactional SQL migrations are the source of truth. The initial migration established owner-only editing; the second implements the user-requested Reader/Writer extension without changing existing shares from Reader. Apply them in order; never rerun the initial migration on an existing installation. `documents` contains UUID ID, owner derived from `auth.uid()`, trimmed-length-constrained title, Tiptap JSONB content with a doc/array root constraint, and a database timestamp. INSERT grants only title/content; UPDATE grants only title/content. IDs, owner, and timestamps cannot be changed through the browser role. The trigger sets updated_at.
+Three versioned transactional SQL migrations are the source of truth. The third adds generated card previews and a private image bucket with Storage policies. The initial migration established owner-only editing; the second implements the user-requested Reader/Writer extension without changing existing shares from Reader. Apply them in order; never rerun the initial migration on an existing installation. `documents` contains UUID ID, owner derived from `auth.uid()`, trimmed-length-constrained title, Tiptap JSONB content with a doc/array root constraint, and a database timestamp. INSERT grants only title/content; UPDATE grants only title/content. IDs, owner, and timestamps cannot be changed through the browser role. The trigger sets updated_at.
 
 `document_shares` has a `(document_id, recipient_id)` primary key, prevents self-sharing, and references seeded demo recipients. A composite `(document_id, owner_id)` foreign key targets a unique key on documents. This prevents a user from fabricating ownership of someone else's document.
 
@@ -32,11 +32,19 @@ These policies do not mutually recurse: document reads may consult shares, but s
 
 The JSON root constraint protects the storage contract but is not a complete Tiptap schema validator. Content from the UI/importer uses known Tiptap nodes. A future server boundary could validate a stricter document schema and impose a rich-text body size limit.
 
+## Attachments and importing into a draft
+
+Image attachments use the private `document-images` bucket. The path `<document UUID>/<random UUID>--<safe filename>` associates each object with a document; there is no public bucket, permanent public URL, or separate metadata table. Storage metadata supplies display names and byte sizes. Policies consult the document and share rows without adding recursion: any permitted document reader can read images; only owners/Writers can insert or delete. There is no overwrite UPDATE policy. The bucket enforces a 2 MiB cap and PNG/JPEG/WebP MIME allowlist. The browser additionally validates file signatures, decodes the image, and limits each side to 4096 pixels.
+
+Uploads and removal persist immediately, separately from explicit document Save. Image previews use five-minute signed URLs; refreshing images renews them. Current-session download uses Storage authorization again. A previously issued signed URL remains usable until expiry; this is a deliberate short-lived-link tradeoff. A removal must return an affected object and a follow-up list must confirm absence; a zero-row denial is not reported as success. Unexpected upload failures retain existing attachments. General attachments, rich-text inline images, thumbnails/transcoding, and per-document total quotas are deferred.
+
+Text import into an existing draft decodes/validates first and reads the current editor state afterward, then appends paragraph/text nodes and marks the document dirty. This avoids overwriting edits made during asynchronous file reading. Existing formatting and the title stay intact; Save persists the combined content. Invalid input never touches the draft. The original text binary is discarded.
+
 ## Deployment and verification
 
 Render builds the committed lockfile with npm ci and serves dist over HTTPS; a catch-all rewrite serves direct routes. Supabase provides Auth, the REST data API, RLS enforcement, and durable Postgres. Client-only architecture keeps deployment small while enforcement stays in the database. VITE environment values are public build inputs; privileged keys stay outside app/test clients.
 
-Actual check outcomes are recorded in CHECKS.md. Import tests exercise the same text fixture used in the walkthrough. `scripts/check-permissions.mjs` is a real ordinary-account API probe, and `scripts/browser-check.mjs` uses isolated Alice/Bob browser contexts against the configured product URL. Pending checks are explicitly marked, not inferred from code review.
+Actual check outcomes are recorded in CHECKS.md. Import tests exercise the same text fixture used in the walkthrough. `tests/integration/check-permissions.mjs` is a real ordinary-account API probe, and `tests/integration/browser-check.mjs` uses isolated Alice/Bob browser contexts against the configured product URL. Pending checks are explicitly marked, not inferred from code review.
 
 ## Tradeoffs and next 2–4 hours
 

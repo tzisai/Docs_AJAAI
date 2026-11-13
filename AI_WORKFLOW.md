@@ -25,3 +25,11 @@ Live Supabase initially responded that the documents table was missing; a later 
 ## Later Reader/Writer request
 
 The user subsequently requested editable shared access. This replaced the original owner-only scope. The change uses an additive migration, preserves existing Reader grants, and restricts role management to the owner. The previous client owner filter on Save was removed so valid Writers can save; database RLS remains authoritative. Local PostgreSQL-role checks and isolated UI checks verified promotion, Writer saves, forbidden sharing/ownership changes, and immediate downgrade denial. Cloud verification remains pending until the additive migration is applied; it is not inferred from the local checks.
+
+## Later cards, images, and draft-import request
+
+Codex inspected the requested David Estrada reference in Chromium, then adapted its typography/contrast into a card library with visible actions and reduced-motion support. A useful engineering choice was generating short previews in Postgres instead of fetching every JSON body for cards. Images use a private document-scoped bucket rather than public links or base64 in the rich-text document.
+
+A regression test deliberately delayed text file decoding, changed the draft during the delay, and verified that the newer text survives the append. That tests the failure mode of taking an early AI-generated draft snapshot. Browser QA found an accessible-name issue in the search label; it was replaced with an explicit external label. The UI fixture also verified that oversized image input never triggers an upload request.
+
+All 21 unit checks passed, and the real ordinary-account role suite passed 35 checks. Local SQL and mocked browser checks validate the new file/card implementation separately from cloud Storage acceptance; migration 003 must be applied before that final check can run. Tests and reviewer commands are now in tests/ and tests/README.md.

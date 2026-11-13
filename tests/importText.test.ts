@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { importText, MAX_IMPORT_BYTES } from './importText'
+import { importText, MAX_IMPORT_BYTES } from '../src/importText'
 function file(name: string, bytes: Uint8Array) {
   return { name, size: bytes.length, arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer }
 }

@@ -8,6 +8,8 @@ import StarterKit from '@tiptap/starter-kit'
 import { blankContent, configured, createDocument, message, supabase } from './data'
 import type { DemoUser, Doc, Metadata, Recipient, ShareRole } from './data'
 import { importText } from './importText'
+import { downloadDocument, importIntoDraft } from './documentFiles'
+import { Attachments } from './Attachments'
 import '@fontsource/instrument-sans/400.css'
 import '@fontsource/instrument-sans/500.css'
 import '@fontsource/instrument-sans/600.css'
@@ -63,6 +65,10 @@ function Library({session}: {session: Session}) {
   const [docs, setDocs] = useState<Metadata[]>([])
   const [users, setUsers] = useState<DemoUser[]>([])
   const [roles, setRoles] = useState<Record<string, ShareRole>>({})
+  const [sharing, setSharing] = useState<Metadata | null>(null)
+  const shareTrigger = useRef<HTMLButtonElement | null>(null)
+  const [downloading, setDownloading] = useState('')
+  const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -70,7 +76,7 @@ function Library({session}: {session: Session}) {
   const refresh = useCallback(async()=> {
     setLoading(true); setError('')
     const [documents, directory, shares] = await Promise.all([
-      supabase.from('documents').select('id,owner_id,title,updated_at').order('updated_at',{ascending:false}),
+      supabase.from('documents').select('id,owner_id,title,updated_at,preview').order('updated_at',{ascending:false}),
       supabase.from('demo_users').select('id,alias'),
       supabase.from('document_shares').select('document_id,role').eq('recipient_id',session.user.id),
     ])
@@ -85,12 +91,45 @@ function Library({session}: {session: Session}) {
     try { const converted = file ? await importText(file) : undefined; const id = await createDocument(converted?.title, converted?.content); navigate('/docs/' + id) }
     catch(error) {setError(message(error))} finally {setBusy(false); if(fileRef.current) fileRef.current.value=''}
   }
-  function section(title: string, owned: boolean, index: string) {
-    const items = docs.filter(doc => (doc.owner_id === session.user.id) === owned)
-    return <section className="document-section"><div className="section-heading"><h2>{title}</h2><span className="count">{String(items.length).padStart(2,'0')}</span></div>{items.length ? <div className="document-list"><div className="list-labels"><span>DOCUMENT</span><span>ACCESS / OWNER</span><span>LAST EDITED</span></div>{items.map(doc=><button className="document-row" key={doc.id} onClick={()=>navigate('/docs/'+doc.id)}><span className="document-name"><span className="doc-symbol" aria-hidden="true">↗</span>{doc.title}</span><span className="ownership">{owned ? 'Owner · you' : `Shared · ${users.find(u=>u.id===doc.owner_id)?.alias || 'Document owner'} · ${roles[doc.id] === 'writer' ? 'Writer' : 'Reader'}`}</span><time dateTime={doc.updated_at}>{new Date(doc.updated_at).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'})}</time></button>)}</div> : <div className="empty"><span className="empty-index">{index}</span><div><h3>{owned ? 'A fresh page is waiting.' : 'Good ideas travel.'}</h3><p>{owned ? 'Create a document or import your notes to begin.' : 'Documents others share with you will appear here, ready to read.'}</p></div></div>}</section>
+  async function download(doc: Metadata) {
+    if(downloading)return
+    setDownloading(doc.id);setError('')
+    try {
+      const {data,error}=await supabase.from('documents').select('title,content').eq('id',doc.id).maybeSingle()
+      if(error)throw error
+      if(!data)throw new Error('This document is no longer available to you.')
+      downloadDocument(data.title,data.content)
+    }catch(error){setError('Could not download document. '+message(error))}
+    finally{setDownloading('')}
   }
-  return <><Header session={session}/><main className="library"><div className="library-heading"><div><p className="eyebrow">YOUR WORKSPACE</p><h1>Room for your ideas.</h1><p className="muted">A place to write, keep, and share what matters.</p></div><div className="library-actions"><div className="buttons"><button disabled={busy} onClick={()=>fileRef.current?.click()}>Import .txt</button><button className="primary" disabled={busy} onClick={()=>void create()}>{busy ? 'Creating…' : 'New document +'}</button></div><p className="hint">Import UTF-8 .txt · up to 100 KiB</p><input ref={fileRef} type="file" accept=".txt,text/plain" aria-label="Import UTF-8 text file" hidden onChange={e=>{const file=e.target.files?.[0]; if(file) void create(file)}}/></div></div><ErrorText text={error}/>{error && <button onClick={()=>void refresh()}>Reload library</button>}{loading ? <p role="status">Loading your documents…</p> : <>{section('My documents',true,'01')}{section('Shared with me',false,'02')}</>}<footer>Built for a little more focus.</footer></main></>
+  function section(title: string, owned: boolean, index: string) {
+    const all=docs.filter(doc=>(doc.owner_id===session.user.id)===owned)
+    const items=all.filter(doc=>(doc.title+' '+(doc.preview??'')).toLowerCase().includes(search.toLowerCase()))
+    return <section className="document-section">
+      <div className="section-heading"><div><span className="section-index">/{index}</span><h2>{title}</h2></div><span className="count">{String(items.length).padStart(2,'0')}</span></div>
+      {items.length?<div className="document-grid">{items.map((doc,index)=>{
+        const editable=owned||roles[doc.id]==='writer'
+        return <article className={`document-card card-tone-${index%4}`} key={doc.id} style={{animationDelay:`${Math.min(index,8)*45}ms`}} aria-labelledby={'card-'+doc.id}>
+          <button className="card-preview" aria-label={`Open ${doc.title}`} onClick={()=>navigate('/docs/'+doc.id)}>
+            <span className="mini-page"><span className="mini-page-label">AJAIA / DOCUMENT</span><span className="mini-page-title">{doc.title}</span><span className="mini-page-text">{doc.preview||'An unwritten page. Make it yours.'}</span><span className="mini-page-line"/><span className="mini-page-line short"/></span>
+            <span className="card-open" aria-hidden="true">↗</span>
+          </button>
+          <div className="card-details"><p className="card-access">{owned?'OWNER · YOU':`Shared · ${users.find(u=>u.id===doc.owner_id)?.alias||'Document owner'} · ${roles[doc.id]==='writer'?'Writer':'Reader'}`}</p><h3 id={'card-'+doc.id}>{doc.title}</h3><time dateTime={doc.updated_at}>Edited {new Date(doc.updated_at).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}</time></div>
+          <div className="card-actions"><button onClick={()=>navigate('/docs/'+doc.id)}>{editable?'Edit':'Open'}</button>{owned&&<button onClick={event=>{shareTrigger.current=event.currentTarget;setSharing(doc)}}>Share</button>}<button disabled={Boolean(downloading)} onClick={()=>void download(doc)}>{downloading===doc.id?'Downloading…':'Download'}</button></div>
+        </article>
+      })}</div>:<div className="empty"><span className="empty-index">{index}</span><div><h3>{search?'No matching pages.':owned?'Your next idea starts here.':'Good ideas travel.'}</h3><p>{search?'Try another title or a few words from your document.':owned?'Start with a blank page, or bring your notes along.':'Documents shared with you will land here. A little collaboration, a lot of possibility.'}</p></div></div>}
+    </section>
+  }
+  return <><Header session={session}/><main className="library">
+    <div className="workspace-intro"><span><i className="status-dot"/> YOUR CREATIVE CORNER</span><span>LESS NOISE. MORE IDEAS.</span></div>
+    <div className="library-heading"><div><p className="eyebrow">WRITE. KEEP. SHARE.</p><h1>Make room<br/>for <em>what’s next.</em><span className="hero-star" aria-hidden="true">✳</span></h1><p className="muted">Big thoughts. Rough drafts. The good stuff in between.</p></div><div className="library-actions"><div className="buttons"><button disabled={busy} onClick={()=>fileRef.current?.click()}>Import .txt ↗</button><button className="primary" disabled={busy} onClick={()=>void create()}>{busy?'Creating…':'New document +'}</button></div><p className="hint">UTF-8 .txt · up to 100 KiB</p><input ref={fileRef} type="file" accept=".txt,text/plain" aria-label="Import UTF-8 text file" hidden onChange={event=>{const file=event.target.files?.[0];if(file)void create(file)}}/></div></div>
+    <div className="library-tools"><span>{docs.length} {docs.length===1?'document':'documents'} / endless possibilities</span><div className="search-box"><label className="sr-only" htmlFor="document-search">Search documents</label><input id="document-search" type="search" placeholder="Find a thought…" value={search} onChange={event=>setSearch(event.target.value)}/><span aria-hidden="true">⌕</span></div></div>
+    <ErrorText text={error}/>{error&&<button onClick={()=>void refresh()}>Reload library</button>}
+    {loading?<p role="status">Gathering your ideas…</p>:<>{section('My documents',true,'01')}{section('Shared with me',false,'02')}</>}
+    <footer><span>AJAIA / A LITTLE SPACE TO THINK</span><span>Made for your next good idea. ↗</span></footer>
+  </main>{sharing&&<ShareDialog document={sharing} onClose={()=>{setSharing(null);requestAnimationFrame(()=>shareTrigger.current?.focus())}}/>}</>
 }
+
 function DocumentRoute({session}: {session: Session}) {
   const {id} = useParams()
   const [doc, setDoc] = useState<Doc | null>(null)
@@ -133,6 +172,10 @@ function DocumentEditor({doc, session, role}: {doc: Doc; session: Session; role:
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [share, setShare] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState('')
+  const [importNotice, setImportNotice] = useState('')
+  const importInput = useRef<HTMLInputElement>(null)
   const inFlight = useRef(false)
   const shareButton = useRef<HTMLButtonElement>(null)
   const dirty = canEdit && JSON.stringify({title,content:body}) !== baseline
@@ -168,6 +211,17 @@ function DocumentEditor({doc, session, role}: {doc: Doc; session: Session; role:
       else blocker.reset()
     }
   },[blocker])
+  async function appendText(file: File) {
+    if(!canEdit||!editor||importing)return
+    setImporting(true);setImportError('');setImportNotice('')
+    try {
+      const content=await importIntoDraft(file,()=>editor.getJSON())
+      if(editor.isDestroyed)return
+      editor.commands.setContent(content,{emitUpdate:true})
+      setImportNotice('Text appended to your draft. Review it, then Save to keep it.')
+    }catch(error){setImportError(message(error))}
+    finally{setImporting(false);if(importInput.current)importInput.current.value=''}
+  }
   const canLeave=()=>!dirty || window.confirm('Discard unsaved changes?')
   return <><Header session={session} beforeLeave={canLeave}/>
     <main className="editor-workspace">
@@ -185,8 +239,10 @@ function DocumentEditor({doc, session, role}: {doc: Doc; session: Session; role:
         <p className="hint">{owned ? 'You manage access · Save with Ctrl / ⌘ S' : canEdit ? 'You can edit · Only the owner manages sharing · Save with Ctrl / ⌘ S' : 'You have read access. Ask the owner for Writer access to make changes.'}</p>
       </div>
       <ErrorText text={error}/>
+      {canEdit&&<div className="draft-import"><div><button disabled={importing} onClick={()=>importInput.current?.click()}>{importing?'Reading text…':'Import text into draft ↗'}</button><span className="hint">UTF-8 .txt · up to 100 KiB · appends without replacing your work</span></div><input ref={importInput} type="file" accept=".txt,text/plain" aria-label="Import text into current draft" hidden onChange={event=>{const file=event.target.files?.[0];if(file)void appendText(file)}}/><ErrorText text={importError}/>{importNotice&&<p className="success">{importNotice}</p>}</div>}
       {canEdit && editor && <Toolbar editor={editor}/>}
       <div className="writing-page"><EditorContent editor={editor}/></div>
+      <Attachments documentId={doc.id} canEdit={canEdit}/>
     </main>
     {share && <ShareDialog document={doc} onClose={()=>{setShare(false); requestAnimationFrame(()=>shareButton.current?.focus())}}/>}
   </>
@@ -208,7 +264,7 @@ function keepDialogFocus(event: React.KeyboardEvent<HTMLDialogElement>) {
   if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
   else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
 }
-function ShareDialog({document: doc,onClose}: {document: Doc; onClose:()=>void}) {
+function ShareDialog({document: doc,onClose}: {document: Pick<Doc,'id'|'owner_id'|'title'>; onClose:()=>void}) {
   const ref=useRef<HTMLDialogElement>(null)
   const [users,setUsers]=useState<DemoUser[]>([])
   const [recipients,setRecipients]=useState<Recipient[]>([])

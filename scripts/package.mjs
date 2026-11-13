@@ -1,7 +1,7 @@
 import { readFileSync, mkdirSync, copyFileSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 const docs=['README.md','ARCHITECTURE.md','AI_WORKFLOW.md','SUBMISSION.md','CHECKS.md','DASHBOARD_SETUP.md','WALKTHROUGH_SCRIPT.md','WALKTHROUGH_URL.txt']
-const files=['src','supabase','scripts','samples','package.json','package-lock.json','tsconfig.json','vite.config.ts','index.html','.env.example','.gitignore','.node-version','render.yaml','LICENSE',...docs]
+const files=['src','supabase','scripts','tests','samples','package.json','package-lock.json','tsconfig.json','vite.config.ts','index.html','.env.example','.gitignore','.node-version','render.yaml','LICENSE',...docs]
 mkdirSync('artifacts/submission',{recursive:true})
 const target='artifacts/submission/ajaia-source.zip'
 try {execFileSync('rm',['-f',target])}catch{}

@@ -2,13 +2,13 @@
 
 Product URL: https://docs-ajaai.onrender.com
 
-**Status: release verification incomplete.** The implementation is locally buildable with passing import tests. The owner flow passes against real Supabase locally, and Bob is denied before sharing. The user reports the original deployed flow works, and the deployed sign-in shell is now verified. The new Reader/Writer extension requires its additive SQL migration and a new deployment before cloud role acceptance can be recorded. CHECKS.md records verified outcomes; the product URL is not yet a tested release candidate.
+**Status: release verification incomplete.** The implementation is locally buildable with passing import tests. The owner flow passes against real Supabase locally, and Bob is denied before sharing. The user reports the original deployed flow works, and the deployed sign-in shell is now verified. The real Reader/Writer API suite now passes all 35 checks. The later image/card/draft-import extension requires migration 003 and deployment before cloud acceptance can be recorded. CHECKS.md records verified outcomes; the product URL is not yet a tested release candidate.
 
 ## Folder contents
 
 The reviewer package contains:
 
-- `ajaia-source.zip`: clean source including `src/`, `package.json`, `package-lock.json`, `tsconfig.json`, `vite.config.ts`, `index.html`, `.env.example`, `.gitignore`, `.node-version`, `render.yaml`, `supabase/migrations/202611130001_documents.sql`, `supabase/migrations/202611130002_share_roles.sql`, `supabase/seed-demo.sql`, `scripts/`, `samples/team-notes.txt`, `LICENSE`, and the Markdown/text docs listed below.
+- `ajaia-source.zip`: clean source including `src/`, `package.json`, `package-lock.json`, `tsconfig.json`, `vite.config.ts`, `index.html`, `.env.example`, `.gitignore`, `.node-version`, `render.yaml`, `supabase/migrations/202611130001_documents.sql`, `supabase/migrations/202611130002_share_roles.sql`, `supabase/migrations/202611130003_previews_attachments.sql`, `supabase/seed-demo.sql`, `scripts/`, `tests/` (unit and real-backend integration checks, plus tests/README.md), `samples/team-notes.txt`, `samples/idea-board.png`, `LICENSE`, and the Markdown/text docs listed below.
 - `README.md`: setup, environment variables, migration/seed instructions, .txt constraints, and two-user reviewer script.
 - `ARCHITECTURE.md`: data flow, database enforcement, deployment, and tradeoffs.
 - `AI_WORKFLOW.md`: actual tools, concrete acceleration, changed AI patch, and verification evidence.
@@ -28,20 +28,20 @@ Alice and Bob both sign in successfully. Their disposable credentials are in `RE
 
 ## Working locally
 
-Implemented: sign-in/auth restoration and deep-link return; owned/shared metadata library; create/rename; rich-text controls with pressed states; explicit atomic title/body save with retry and dirty tracking; UTF-8 text import; native Share dialog; owner/Writer editing, Reader rendering, and owner-only sharing/role management. SQL migration includes constraints, column grants, nonrecursive RLS, and immutable ownership. Automated import tests pass. This list describes implementation; it does not substitute for live acceptance evidence.
+Implemented: sign-in/auth restoration and deep-link return; owned/shared metadata library; create/rename; rich-text controls with pressed states; explicit atomic title/body save with retry and dirty tracking; UTF-8 text import; native Share dialog; owner/Writer editing, Reader rendering, owner-only sharing/role management, document preview cards and search, plain-text downloads, append-to-draft text import, and private image attachment UI. SQL migrations include constraints, column grants, nonrecursive RLS, immutable ownership, previews, and private image Storage policies. All 21 unit checks in tests/ pass. The original Reader/Writer API suite passes 35 real checks; cloud attachment checks are pending migration 003. This list describes implementation; it does not substitute for live acceptance evidence.
 
 ## Missing / incomplete
 
-- The Reader/Writer build must be pushed from an authenticated Git terminal and deployed after applying its SQL migration. The existing sign-in shell is live and routing correctly.
-- Supabase owner path works with the initial schema. The requested Reader/Writer extension requires the second migration before deploying this build; cloud role checks are pending until it is applied.
-- Real API private-read/write/grant denial and the local browser owner-save/refresh flow pass. Complete sharing and deployed browser checks remain pending, including offline retry and mobile toolbar/dialog focus.
+- This extension must be pushed from an authenticated Git terminal and deployed after applying migration 003. The existing sign-in shell is live and routing correctly.
+- Supabase Reader/Writer permissions pass real API checks. Apply migration 003 for generated previews and private images before deploying this build.
+- Real API role transitions/private-read/write/grant denial pass. Full deployed browser acceptance for the newest card/image/import flow remains pending; local/isolated results are recorded in CHECKS.md.
 - Tested release commit and verified product URL must be recorded after those checks.
 - User records/uploads the 3–5 minute walkthrough; actual unlisted link goes into WALKTHROUGH_URL.txt.
 - User uploads this package to a Google Drive folder; folder and video links must be checked signed out.
 
 ## With another 2–4 hours
 
-First finish any pending deployment, account setup, and live acceptance checks. Then tighten rich-text JSON schema validation, add metadata pagination, and consider optimistic concurrency for owner tabs. Realtime merging, comments, email invites, version history, additional formats, autosave/local drafts, and optional icon/UI libraries are deliberately excluded. Owners may now grant Writer access; concurrent saves use last-save-wins.
+First finish any pending deployment, account setup, and live acceptance checks. Then tighten rich-text JSON schema validation, add metadata/attachment pagination and per-document quotas, and consider optimistic concurrency for owner tabs. Realtime merging, comments, email invites, version history, additional formats, autosave/local drafts, and optional icon/UI libraries are deliberately excluded. Owners may now grant Writer access; concurrent saves use last-save-wins.
 
 ## Final links
 
